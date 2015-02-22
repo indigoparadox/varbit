@@ -25,19 +25,34 @@ int storage_ensure_database( bstring db_path ) {
          "hardlink_path VARCHAR( 255 )," \
          "mdate INT NOT NULL," \
          "inode INT NOT NULL," \
-         "hash_contents BIGINT," 
+         "size INT NOT NULL, " \
+         "hash_contents BIGINT," \
          "encrypted_filename VARCHAR( 255 )" \
          ");",
       NULL,
       NULL,
       &err_msg
    );
+   CATCH( sql_retval, 1, "Error creating database tables: %s\n", err_msg );
 
-   if( sql_retval ) {
-      DBG_ERR( "Error creating database tables: %s\n", err_msg );
-      retval = 1;
-      goto cleanup;
-   }
+   sql_retval = sqlite3_exec(
+      db,
+      "CREATE INDEX IF NOT EXISTS hardlink_path_idx ON files( hardlink_path )",
+      NULL,
+      NULL,
+      &err_msg
+   );
+   CATCH( sql_retval, 1, "Error creating database index: %s\n", err_msg );
+
+   sql_retval = sqlite3_exec(
+      db,
+      "CREATE INDEX IF NOT EXISTS encrypted_filename_idx " \
+         "ON files( encrypted_filename )",
+      NULL,
+      NULL,
+      &err_msg
+   );
+   CATCH( sql_retval, 1, "Error creating database index: %s\n", err_msg );
 
 cleanup:
 
@@ -48,6 +63,15 @@ cleanup:
    if( NULL != db ) {
       sqlite3_close( db );
    }
+
+   return retval;
+}
+
+int storage_inventory_update( bstring db_path, bstring archive_path ) {
+   int retval = 0;
+
+
+cleanup:
 
    return retval;
 }
