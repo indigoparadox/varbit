@@ -83,19 +83,22 @@ int storage_inventory_update_file( sqlite3* db, bstring file_path ) {
    int sql_retval = 0;
    bstring query_string = bfromcstr( "SELECT * FROM files WHERE path=?" );
    bstring insert_string = bfromcstr(
-      "INSERT INTO files (path, mdate, inode, size) VALUES(?, ?, ?, ?)"
+      "INSERT INTO files (path, mdate, inode, size, hash_contents) " \
+         "VALUES(?, ?, ?, ?, ?)"
    );
    bstring update_string = bfromcstr(
-      "UPDATE files SET mdate=?, inode=?, size=? WHERE path=?"
+      "UPDATE files SET mdate=?, inode=?, size=?, hash_contents=? WHERE path=?"
    );
    storage_file file_object;
    int object_retval = 0;
+   uint64_t file_hash = 0;
 
    /* Setup the file object. */
    memset( &file_object, 0, sizeof( file_object ) );
    file_object.path = bfromcstr( "" );
    file_object.hardlink_path = bfromcstr( "" );
    file_object.encrypted_filename = bfromcstr( "" );
+   file_hash = 0;
 
    /* Get file information. */
    stat_retval = stat( bdata( file_path ), &file_stat );
@@ -111,12 +114,12 @@ int storage_inventory_update_file( sqlite3* db, bstring file_path ) {
       &query,
       NULL
    );
-   CATCH_NONZERO( stat_retval, retval, 1, "Unable to prepare SQL statement." );
+   CATCH_NONZERO( sql_retval, retval, 1, "Unable to prepare SQL statement." );
 
    sql_retval = sqlite3_bind_text(
       query, 1, bdata( file_path ), blength( file_path ), SQLITE_STATIC
    );
-   CATCH_NONZERO( stat_retval, retval, 1, "Unable to bind SQL parameter." );
+   CATCH_NONZERO( sql_retval, retval, 1, "Unable to bind SQL parameter." );
 
    do {
       sql_retval = sqlite3_step( query );
@@ -143,35 +146,54 @@ int storage_inventory_update_file( sqlite3* db, bstring file_path ) {
       retval = 1;
       goto cleanup;
    } else if( 1 > existing_found ) {
+      file_hash = storage_hash_file( file_path );
+
       if( g_verbose ) {
-         printf( "No existing entry found for: %s\n", bdata( file_path ) );
+         printf(
+            "No existing entry found for: %s: %" PRIu64 "\n",
+            bdata( file_path ),
+            file_hash
+         );
       }
 
       /* Insert the file record. */
       sql_retval = sqlite3_prepare_v2(
          db,
-         bdata( update_string ),
-         blength( update_string ),
+         bdata( insert_string ),
+         blength( insert_string ),
          &insert,
          NULL
       );
       CATCH_NONZERO(
-         stat_retval, retval, 1, "Unable to prepare SQL statement."
+         sql_retval, retval, 1, "Unable to prepare SQL statement."
       );
 
       sql_retval = sqlite3_bind_text(
          insert, 1, bdata( file_path ), blength( file_path ), SQLITE_STATIC
       );
-      CATCH_NONZERO( stat_retval, retval, 1, "Unable to bind SQL parameter." );
+      CATCH_NONZERO(
+         sql_retval, retval, 1, "Unable to bind SQL parameter: path"
+      );
 
       sql_retval = sqlite3_bind_int64( insert, 2, file_stat.st_mtime );
-      CATCH_NONZERO( stat_retval, retval, 1, "Unable to bind SQL parameter." );
+      CATCH_NONZERO(
+         sql_retval, retval, 1, "Unable to bind SQL parameter: mtime"
+      );
 
       sql_retval = sqlite3_bind_int64( insert, 3, file_stat.st_ino );
-      CATCH_NONZERO( stat_retval, retval, 1, "Unable to bind SQL parameter." );
+      CATCH_NONZERO(
+         sql_retval, retval, 1, "Unable to bind SQL parameter: inode"
+      );
 
       sql_retval = sqlite3_bind_int64( insert, 4, file_stat.st_size );
-      CATCH_NONZERO( stat_retval, retval, 1, "Unable to bind SQL parameter." );
+      CATCH_NONZERO(
+         sql_retval, retval, 1, "Unable to bind SQL parameter: size"
+      );
+
+      sql_retval = sqlite3_bind_int64( insert, 5, file_hash );
+      CATCH_NONZERO(
+         sql_retval, retval, 1, "Unable to bind SQL parameter: hash"
+      );
 
       sqlite3_step( insert );
 
@@ -189,38 +211,46 @@ int storage_inventory_update_file( sqlite3* db, bstring file_path ) {
             );
          }
 
+         file_hash = storage_hash_file( file_path );
+            printf( "New hash: %" PRIu64 "\n", file_hash );
+
          /* Update the file record. */
          sql_retval = sqlite3_prepare_v2(
             db,
-            bdata( insert_string ),
-            blength( insert_string ),
+            bdata( update_string ),
+            blength( update_string ),
             &insert,
             NULL
          );
          CATCH_NONZERO(
-            stat_retval, retval, 1, "Unable to prepare SQL statement."
+            sql_retval, retval, 1, "Unable to prepare SQL statement."
          );
 
          sql_retval = sqlite3_bind_int64( insert, 1, file_stat.st_mtime );
          CATCH_NONZERO(
-            stat_retval, retval, 1, "Unable to bind SQL parameter."
+            sql_retval, retval, 1, "Unable to bind SQL parameter: mtime."
          );
 
          sql_retval = sqlite3_bind_int64( insert, 2, file_stat.st_ino );
          CATCH_NONZERO(
-            stat_retval, retval, 1, "Unable to bind SQL parameter."
+            sql_retval, retval, 1, "Unable to bind SQL parameter: inode."
          );
 
          sql_retval = sqlite3_bind_int64( insert, 3, file_stat.st_size );
          CATCH_NONZERO(
-            stat_retval, retval, 1, "Unable to bind SQL parameter."
+            sql_retval, retval, 1, "Unable to bind SQL parameter: size."
+         );
+
+         sql_retval = sqlite3_bind_int64( insert, 4, file_hash );
+         CATCH_NONZERO(
+            sql_retval, retval, 1, "Unable to bind SQL parameter: hash"
          );
 
          sql_retval = sqlite3_bind_text(
-            insert, 4, bdata( file_path ), blength( file_path ), SQLITE_STATIC
+            insert, 5, bdata( file_path ), blength( file_path ), SQLITE_STATIC
          );
          CATCH_NONZERO(
-            stat_retval, retval, 1, "Unable to bind SQL parameter."
+            sql_retval, retval, 1, "Unable to bind SQL parameter: path"
          );
 
          sqlite3_step( insert );
@@ -296,6 +326,123 @@ cleanup:
 
    return retval;
 }
+
+#ifdef STORAGE_HASH_MURMUR
+
+uint32_t storage_hash_file( bstring file_path ) {
+   FILE* file_handle;
+   char buffer[STORAGE_HASH_BUFFER_SIZE] = { 0 };
+   const uint32_t* buffer_block = (const uint32_t*) buffer;
+   size_t read_bytes = 0;
+   struct stat file_stat;
+   int stat_retval = 0;
+   static const uint32_t c1 = 0xcc9e2d51;
+   static const uint32_t c2 = 0x1b873593;
+   static const uint32_t r1 = 15;
+   static const uint32_t r2 = 13;
+   static const uint32_t m = 5;
+   static const uint32_t n = 0xe6546b64;
+   uint32_t hash = STORAGE_HASH_SEED;
+   int nblocks = 0;
+   uint32_t block_iter;
+   uint32_t k1 = 0;
+
+   /* Get file information. */
+   stat_retval = stat( bdata( file_path ), &file_stat );
+   CATCH_NONZERO(
+      stat_retval, hash, 0, "Unable to open file: %s\n", bdata( file_path )
+   );
+
+   file_handle = fopen( bdata( file_path ), "rb" );
+   CATCH_NULL( 
+      file_handle, hash, 0, "Unable to open file: %s\n", bdata( file_path )
+   );
+
+   do {
+      read_bytes = fread(
+         buffer, sizeof( char ), STORAGE_HASH_BUFFER_SIZE, file_handle
+      );
+
+      /* Hash this block. */
+      block_iter *= c1;
+      block_iter = (block_iter << r1) | (block_iter >> (32 - r1));
+      block_iter *= c2;
+ 
+      hash ^= block_iter;
+      hash = ((hash << r2) | (hash >> (32 - r2))) * m + n;
+
+      /* Count this block. (Should come out to filesize / 4.) */
+      nblocks++;
+   } while( STORAGE_HASH_BUFFER_SIZE == read_bytes );
+
+   /* Hash the tail of the file (remainder of 4). */
+   switch( file_stat.st_size & 3 ) {
+      case 3:
+         k1 ^= buffer[2] << 16;
+      case 2:
+         k1 ^= buffer[1] << 8;
+      case 1:
+         k1 ^= buffer[0];
+   
+         k1 *= c1;
+         k1 = (k1 << r1) | (k1 >> (32 - r1));
+         k1 *= c2;
+         hash ^= k1;
+   }
+ 
+   hash ^= file_stat.st_size;
+   hash ^= (hash >> 16);
+   hash *= 0x85ebca6b;
+   hash ^= (hash >> 13);
+   hash *= 0xc2b2ae35;
+   hash ^= (hash >> 16);
+
+cleanup:
+
+   if( NULL != file_handle ) {
+      fclose( file_handle );
+   }
+
+   return hash;
+}
+
+#endif /* STORAGE_HASH_MURMUR */
+
+#ifdef STORAGE_HASH_FNV
+
+uint64_t storage_hash_file( bstring file_path ) {
+   FILE* file_handle;
+   uint8_t buffer[1] = { 0 };
+   size_t read_bytes = 0;
+   const uint64_t fnv_prime_64 = 1099511628211;
+   const uint64_t fnv_offset_basis_64 = 14695981039346656037;
+   uint64_t hash = fnv_offset_basis_64;
+
+   /* Open file. */
+   file_handle = fopen( bdata( file_path ), "rb" );
+   CATCH_NULL( 
+      file_handle, hash, 0, "Unable to open file: %s\n", bdata( file_path )
+   );
+
+   do {
+      read_bytes = fread( buffer, sizeof( uint8_t ), 1, file_handle );
+
+      /* Hash this block. */
+      hash *= fnv_prime_64;
+      hash ^= *buffer;
+ 
+   } while( 1 == read_bytes );
+
+cleanup:
+
+   if( NULL != file_handle ) {
+      fclose( file_handle );
+   }
+
+   return hash;
+}
+
+#endif /* STORAGE_HASH_FNV */
 
 int storage_sql_storage_file( sqlite3_stmt* row, storage_file* object ) {
    int retval = 0;
