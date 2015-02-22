@@ -1,3 +1,4 @@
 relre:.*\.o$
 relre:.*\.db$
+relre:.*\.db-journal$
 glob:varbit
