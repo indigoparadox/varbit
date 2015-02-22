@@ -85,6 +85,9 @@ int storage_inventory_update_file( sqlite3* db, bstring file_path ) {
    bstring insert_string = bfromcstr(
       "INSERT INTO files (path, mdate, inode, size) VALUES(?, ?, ?, ?)"
    );
+   bstring update_string = bfromcstr(
+      "UPDATE files SET mdate=?, inode=?, size=? WHERE path=?"
+   );
    storage_file file_object;
    int object_retval = 0;
 
@@ -147,8 +150,8 @@ int storage_inventory_update_file( sqlite3* db, bstring file_path ) {
       /* Insert the file record. */
       sql_retval = sqlite3_prepare_v2(
          db,
-         bdata( insert_string ),
-         blength( insert_string ),
+         bdata( update_string ),
+         blength( update_string ),
          &insert,
          NULL
       );
@@ -170,10 +173,58 @@ int storage_inventory_update_file( sqlite3* db, bstring file_path ) {
       sql_retval = sqlite3_bind_int64( insert, 4, file_stat.st_size );
       CATCH_NONZERO( stat_retval, retval, 1, "Unable to bind SQL parameter." );
 
-      sql_retval = sqlite3_step( insert );
+      sqlite3_step( insert );
 
    } else {
-      /* TODO: Test inode/date and UPDATE statement. */
+      /* Test inode/date and test hash if different. */
+      if(
+         file_stat.st_mtime != file_object.mdate ||
+         file_stat.st_ino != file_object.inode ||
+         file_stat.st_size != file_object.size
+      ) {
+         if( g_verbose ) {
+            printf(
+               "FS attributes different, file may have changed: %s\n",
+               bdata( file_path )
+            );
+         }
+
+         /* Update the file record. */
+         sql_retval = sqlite3_prepare_v2(
+            db,
+            bdata( insert_string ),
+            blength( insert_string ),
+            &insert,
+            NULL
+         );
+         CATCH_NONZERO(
+            stat_retval, retval, 1, "Unable to prepare SQL statement."
+         );
+
+         sql_retval = sqlite3_bind_int64( insert, 1, file_stat.st_mtime );
+         CATCH_NONZERO(
+            stat_retval, retval, 1, "Unable to bind SQL parameter."
+         );
+
+         sql_retval = sqlite3_bind_int64( insert, 2, file_stat.st_ino );
+         CATCH_NONZERO(
+            stat_retval, retval, 1, "Unable to bind SQL parameter."
+         );
+
+         sql_retval = sqlite3_bind_int64( insert, 3, file_stat.st_size );
+         CATCH_NONZERO(
+            stat_retval, retval, 1, "Unable to bind SQL parameter."
+         );
+
+         sql_retval = sqlite3_bind_text(
+            insert, 4, bdata( file_path ), blength( file_path ), SQLITE_STATIC
+         );
+         CATCH_NONZERO(
+            stat_retval, retval, 1, "Unable to bind SQL parameter."
+         );
+
+         sqlite3_step( insert );
+      }
    }
 
 cleanup:
@@ -185,7 +236,7 @@ cleanup:
    if( NULL != insert ) {
       sql_retval = sqlite3_finalize( insert );
       if( sql_retval ) {
-         DBG_ERR( "Insert statement failed: %s\n", bdata( file_path ) );
+         DBG_ERR( "INSERT/UPDATE statement failed: %s\n", bdata( file_path ) );
       }
    }
 
@@ -228,7 +279,7 @@ int storage_inventory_update_walk( bstring db_path, bstring archive_path ) {
          storage_inventory_update_walk( db_path, subdir_path );
          continue;
       } else if( DT_REG == entry->d_type ) {
-         /* TODO: Record file attributes. */
+         /* Record file attributes. */
          storage_inventory_update_file( db, subdir_path );
       } else if( DT_LNK == entry->d_type ) {
          /* TODO: Record link existence. */
@@ -254,6 +305,24 @@ int storage_sql_storage_file( sqlite3_stmt* row, storage_file* object ) {
       retval = 1;
       goto cleanup;
    }
+
+   /*
+         "path VARCHAR( 255 ) PRIMARY KEY," \
+         "hardlink_path VARCHAR( 255 )," \
+         "mdate INT NOT NULL," \
+         "inode INT NOT NULL," \
+         "size INT NOT NULL, " \
+         "hash_contents BIGINT," \
+         "encrypted_filename VARCHAR( 255 )" \
+   */
+
+   object->path = bformat( "%s", sqlite3_column_text( row, 0 ) );
+   object->hardlink_path = bformat( "%s", sqlite3_column_text( row, 1 ) );
+   object->mdate = sqlite3_column_int64( row, 2 );
+   object->inode = sqlite3_column_int64( row, 3 );
+   object->size = sqlite3_column_int64( row, 4 );
+   object->hash_contents = sqlite3_column_int64( row, 5 );
+   object->encrypted_filename = bformat( "%s", sqlite3_column_text( row, 6 ) );
 
 cleanup:
    return retval;
