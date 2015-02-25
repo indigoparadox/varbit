@@ -89,6 +89,12 @@ cleanup:
    return retval;
 }
 
+int storage_inventory_prune( bstring db_path ) {
+   int retval = 0;
+
+   return retval;
+}
+
 int storage_inventory_update_file( sqlite3* db, bstring file_path ) {
    struct stat file_stat;
    int stat_retval = 0;

@@ -29,9 +29,11 @@ int main( int argc, char** argv ) {
    bstring arc_path = NULL;
    int retval = 0;
    int storage_retval = 0;
+   int dedup = 0;
+   int prune = 0;
 
    /* Parse command line arguments. */
-   while( ((arg_iter = getopt( argc, argv, "hvd:a:" )) != -1) ) {
+   while( ((arg_iter = getopt( argc, argv, "hvd:a:l" )) != -1) ) {
       switch( arg_iter ) {
          case 'h':
 
@@ -61,6 +63,14 @@ int main( int argc, char** argv ) {
             arc_path = bformat( "%s", optarg );
             break;
 
+         case 'l':
+            dedup = 1;
+            break;
+
+         case 'p':
+            prune = 1;
+            break;
+
          case ':':
             DBG_ERR( "Option -%c requires an operand.\n", optopt );
             break;
@@ -82,6 +92,17 @@ int main( int argc, char** argv ) {
    CATCH_NONZERO(
       storage_retval, retval, 1, "Error updating inventory. Aborting.\n"
    );
+
+   if( dedup ) {
+
+   }
+
+   if( prune ) {
+      storage_retval = storage_inventory_prune( db_path );
+      CATCH_NONZERO(
+         storage_retval, retval, 1, "Error pruning. Aborting. \n"
+      );
+   }
 
 cleanup:
 
