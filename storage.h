@@ -50,6 +50,7 @@ typedef struct {
 } storage_file;
 
 int storage_ensure_database( bstring );
+int storage_inventory_prune( bstring );
 int storage_inventory_update_file( sqlite3*, bstring );
 int storage_inventory_update_walk( bstring, bstring );
 #ifdef STORAGE_HASH_MURMUR
