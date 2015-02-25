@@ -31,8 +31,24 @@ int main( int argc, char** argv ) {
    int storage_retval = 0;
 
    /* Parse command line arguments. */
-   while( ((arg_iter = getopt( argc, argv, "vd:a:" )) != -1) ) {
+   while( ((arg_iter = getopt( argc, argv, "hvd:a:" )) != -1) ) {
       switch( arg_iter ) {
+         case 'h':
+
+            printf( "Usage: varbit -d <db_path> -a <arc_path> [-v]\n" );
+            printf( "This tool will build a database of hashes for all\n" );
+            printf( "files in the specified archive directory.\n" );
+            printf( "\n" );
+            printf( "-d <db_path>\tThe location of the files database.\n" );
+            printf( "-a <arc_path>\tThe directory of the file archive to " \
+               "catalog.\n" );
+            printf( "-v\t\tBe verbose.\n" );
+            printf( "\n" );
+            printf( "The database and archive paths are required.\n" );
+         
+            /* Exit immediately after showing help. */
+            goto cleanup;
+
          case 'v':
             g_verbose = 1;
             break;

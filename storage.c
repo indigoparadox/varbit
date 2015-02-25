@@ -32,6 +32,8 @@ int storage_ensure_database( bstring db_path ) {
    );
 
    /* Ensure tables exist. */
+   /* TODO: Encrypted contents hash? */
+   /* TODO: System table with version. */
    sql_retval = sqlite3_exec(
       db,
       "CREATE TABLE IF NOT EXISTS files(" \
@@ -476,6 +478,7 @@ int storage_sql_storage_file( sqlite3_stmt* row, storage_file* object ) {
          "size INT NOT NULL, " \
          "hash_contents BIGINT," \
          "encrypted_filename VARCHAR( 255 )" \
+         TODO: Encrypted contents hash?
    */
 
    object->path = bformat( "%s", sqlite3_column_text( row, 0 ) );
