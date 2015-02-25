@@ -1,0 +1,13 @@
+
+This is a super-simple tool designed to build a database of hashes and
+metadata information for a directory of files.
+
+This can be useful for deduplication or for encrypting files for cloud
+backup.
+
+It's still super-rough. Sorry.
+
+= TODO =
+- Automatic deduplication.
+- Encryption and hashing of contents (probably using external tool).
+
