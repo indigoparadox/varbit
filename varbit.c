@@ -40,16 +40,22 @@ int main( int argc, char** argv ) {
       switch( arg_iter ) {
          case 'h':
 
-            printf( "Usage: varbit -d <db_path> -a <arc_path> [-v]\n" );
+            printf( "Usage: varbit -d <db_path> -a <arc_path> [-v] " );
+            printf( "[-f] [-s|-l|-p]\n" );
             printf( "This tool will build a database of hashes for all\n" );
             printf( "files in the specified archive directory.\n" );
             printf( "\n" );
+            printf( "-s\t\tScan arc_path for new files.\n" );
+            printf( "-l\t\tScan the database for duplicate files.\n" );
+            printf( "-p\t\tPrune deleted files from the database.\n" );
             printf( "-d <db_path>\tThe location of the files database.\n" );
             printf( "-a <arc_path>\tThe directory of the file archive to " \
                "catalog.\n" );
             printf( "-v\t\tBe verbose.\n" );
+            printf( "-f\t\tForce. Don't ask questions. (DANGEROUS!)\n" );
             printf( "\n" );
-            printf( "The database and archive paths are required.\n" );
+            printf( "The database path is always required.\n" );
+            printf( "The archive path is required for (s)can.\n" );
          
             /* Exit immediately after showing help. */
             goto cleanup;
