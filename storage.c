@@ -17,8 +17,43 @@
 #include "storage.h"
 
 extern int g_verbose;
+extern int g_force;
 
 /* End MurmurHash. */
+
+sqlite3* storage_open_database( bstring db_path, int write ) {
+   sqlite3* db = NULL;
+   char* err_msg = NULL;
+   int sql_retval = 0;
+   int retval = 0;
+   
+   sql_retval = sqlite3_open( bdata( db_path ), &db );
+   CATCH_NONZERO(
+      sql_retval, retval, 1, "Unable to open database: %s\n", bdata( db_path )
+   );
+   
+   if( write ) {
+      sql_retval =sqlite3_exec(
+         db, "PRAGMA journal_mode = WAL", NULL, NULL, &err_msg
+      );
+      CATCH_NONZERO(
+         sql_retval, retval, 1, "Unable to set journal_mode to WAL: %s\n",
+         err_msg
+      );
+   }
+
+cleanup:
+
+   if( NULL != err_msg ) {
+      sqlite3_free( err_msg );
+   }
+
+   if( NULL != db && 0 != retval ) {
+      sqlite3_close( db );
+   }
+
+   return db;
+}
 
 int storage_ensure_database( bstring db_path ) {
    sqlite3* db = NULL;
@@ -26,10 +61,7 @@ int storage_ensure_database( bstring db_path ) {
    int retval = 0;
    char* err_msg = NULL;
 
-   sql_retval = sqlite3_open( bdata( db_path ), &db );
-   CATCH_NONZERO(
-      sql_retval, retval, 1, "Unable to open database: %s\n", bdata( db_path )
-   );
+   db = storage_open_database( db_path, 1 );
 
    /* Ensure tables exist. */
    /* TODO: Encrypted contents hash? */
@@ -89,22 +121,163 @@ cleanup:
    return retval;
 }
 
-int storage_inventory_prune( bstring db_path ) {
-   int retval = 0;
+int storage_select_file(
+   bstring db_path, bstring file_path, storage_file* file_object
+) {
+   int existing_found = 0;
+   sqlite3* db = NULL;
+   sqlite3_stmt* query;
+   sqlite3_stmt* insert = NULL;
+   int sql_retval = 0;
+   bstring query_string = bfromcstr( "SELECT * FROM files WHERE path=?" );
+   int object_retval = 0;
 
-   return retval;
+   /* Open the database. */
+   db = storage_open_database( db_path, 0 );
+   CATCH_NULL(
+      db, existing_found, -1, "Skipping. Unable to open database: %s\n",
+      bdata( db_path )
+   );
+
+   /* Search for existing entries for file. */
+   sql_retval = sqlite3_prepare_v2(
+      db,
+      bdata( query_string ),
+      blength( query_string ),
+      &query,
+      NULL
+   );
+   CATCH_NONZERO(
+      sql_retval, existing_found, -1, "Unable to prepare SQL statement."
+   );
+
+   sql_retval = sqlite3_bind_text(
+      query, 1, bdata( file_path ), blength( file_path ), SQLITE_STATIC
+   );
+   CATCH_NONZERO(
+      sql_retval, existing_found, -1, "Unable to bind SQL parameter."
+   );
+
+   do {
+      sql_retval = sqlite3_step( query );
+      switch( sql_retval ) {
+         case SQLITE_DONE:
+            break;
+   
+         case SQLITE_ROW:
+            existing_found++;
+            object_retval = storage_sql_storage_file( query, file_object );
+            CATCH_NONZERO(
+               object_retval, existing_found, -1,
+               "Skipping. Error converting: %s\n", bdata( file_path )
+            );
+            break;
+            
+      }
+   } while( SQLITE_ROW == sql_retval );
+
+cleanup:
+
+   bdestroy( query_string );
+   sqlite3_finalize( query );
+
+   if( NULL != db ) {
+      sqlite3_close( db );
+   }
+
+   return existing_found;
 }
 
-int storage_inventory_update_file( sqlite3* db, bstring file_path ) {
+int storage_inventory_prune( bstring db_path ) {
+}
+
+int storage_inventory_dedupe_find( bstring db_path, storage_group** objects ) {
+   sqlite3* db = NULL;
+   sqlite3_stmt* query = NULL;
+   int sql_retval = 0;
+   char* err_msg = NULL;
+   int dupes_found = 0;
+
+   /* Find dupes and list them as:                                            *
+    * | hash | number of files w/ same hash | path to dupe | size of orig |   */
+   bstring query_string = bfromcstr( 
+      "SELECT h.hash_contents, h.hash_count, p.path, p.size " \
+         "FROM files p " \
+         "JOIN (" \
+            "SELECT hash_contents, count( * ) AS hash_count " \
+            "FROM files GROUP BY hash_contents HAVING( count(*)>1 )" \
+         ") AS h ON h.hash_contents=p.hash_contents " \
+         "ORDER BY h.hash_contents ASC"
+   );
+
+   /* Open the database. */
+   db = storage_open_database( db_path, 0 );
+   CATCH_NULL(
+      db, dupes_found, -1, "Aborting. Unable to open database: %s\n",
+      bdata( db_path )
+   );
+
+   /* Search for existing entries for file. */
+   sql_retval = sqlite3_prepare_v2(
+      db,
+      bdata( query_string ),
+      blength( query_string ),
+      &query,
+      NULL
+   );
+   CATCH_NONZERO(
+      sql_retval, dupes_found, -1,
+      "Unable to prepare SQL statement: %s\n",
+      sqlite3_errmsg( db )
+   );
+
+   do {
+      sql_retval = sqlite3_step( query );
+      switch( sql_retval ) {
+         case SQLITE_DONE:
+            break;
+   
+         case SQLITE_ROW:
+            dupes_found++;
+
+            printf(
+               "%lu %d %s\n",
+               sqlite3_column_int64( query, 0 ),
+               sqlite3_column_int( query, 1 ),
+               sqlite3_column_text( query, 2 )
+            );
+
+            /*
+            object_retval = storage_sql_storage_file( query, file_object );
+            CATCH_NONZERO(
+               object_retval, existing_found, -1,
+               "Skipping. Error converting: %s\n", bdata( file_path )
+            );
+            */
+            break;
+            
+      }
+   } while( SQLITE_ROW == sql_retval );
+
+cleanup:
+
+   bdestroy( query_string );
+   sqlite3_finalize( query );
+
+   if( NULL != db ) {
+      sqlite3_close( db );
+   }
+
+}
+
+int storage_inventory_update_file( bstring db_path, bstring file_path ) {
    struct stat file_stat;
    int stat_retval = 0;
    int retval = 0;
    char* err_msg = NULL;
    int existing_found = 0;
-   sqlite3_stmt* query;
    sqlite3_stmt* insert = NULL;
    int sql_retval = 0;
-   bstring query_string = bfromcstr( "SELECT * FROM files WHERE path=?" );
    bstring insert_string = bfromcstr(
       "INSERT INTO files (path, mdate, inode, size, hash_contents) " \
          "VALUES(?, ?, ?, ?, ?)"
@@ -115,6 +288,7 @@ int storage_inventory_update_file( sqlite3* db, bstring file_path ) {
    storage_file file_object;
    int object_retval = 0;
    uint64_t file_hash = 0;
+   sqlite3* db = NULL;
 
    /* Setup the file object. */
    memset( &file_object, 0, sizeof( file_object ) );
@@ -129,38 +303,17 @@ int storage_inventory_update_file( sqlite3* db, bstring file_path ) {
       stat_retval, retval, 1, "Unable to open file: %s\n", bdata( file_path )
    );
 
-   /* Search for existing entries for file. */
-   sql_retval = sqlite3_prepare_v2(
-      db,
-      bdata( query_string ),
-      blength( query_string ),
-      &query,
-      NULL
+   existing_found = storage_select_file( db_path, file_path, &file_object );
+   CATCH_LTZERO(
+      existing_found, retval, 1, "Problem retrieving file record. Skipping.\n"
    );
-   CATCH_NONZERO( sql_retval, retval, 1, "Unable to prepare SQL statement." );
 
-   sql_retval = sqlite3_bind_text(
-      query, 1, bdata( file_path ), blength( file_path ), SQLITE_STATIC
+   /* Open the database. */
+   db = storage_open_database( db_path, 1 );
+   CATCH_NULL(
+      db, existing_found, -1, "Skipping. Unable to open database: %s\n",
+      bdata( db_path )
    );
-   CATCH_NONZERO( sql_retval, retval, 1, "Unable to bind SQL parameter." );
-
-   do {
-      sql_retval = sqlite3_step( query );
-      switch( sql_retval ) {
-         case SQLITE_DONE:
-            break;
-   
-         case SQLITE_ROW:
-            existing_found++;
-            object_retval = storage_sql_storage_file( query, &file_object );
-            CATCH_NONZERO(
-               object_retval, retval, 1,
-               "Skipping. Error converting: %s\n", bdata( file_path )
-            );
-            break;
-            
-      }
-   } while( SQLITE_ROW == sql_retval );
 
    if( 1 < existing_found ) {
       DBG_ERR(
@@ -277,20 +430,26 @@ int storage_inventory_update_file( sqlite3* db, bstring file_path ) {
          );
 
          sqlite3_step( insert );
+      } else {
+         if( g_verbose ) {
+            printf( "Entry OK for file: %s\n", bdata( file_path ) );
+         }
       }
    }
 
 cleanup:
 
-   bdestroy( query_string );
    bdestroy( insert_string );
    storage_free_storage_file( &file_object );
-   sqlite3_finalize( query );
    if( NULL != insert ) {
       sql_retval = sqlite3_finalize( insert );
       if( sql_retval ) {
          DBG_ERR( "INSERT/UPDATE statement failed: %s\n", bdata( file_path ) );
       }
+   }
+
+   if( NULL != db ) {
+      sqlite3_close( db );
    }
 
    return retval;
@@ -302,17 +461,11 @@ int storage_inventory_update_walk( bstring db_path, bstring archive_path ) {
    DIR* dir = NULL;
    struct dirent* entry = NULL;
    bstring subdir_path = bfromcstr( "" );
-   sqlite3* db = NULL;
    int sql_retval = 0;
 
    dir = opendir( bdata( archive_path ) );
    CATCH_NULL(
       dir, retval, 1, "Unable to open directory: %s\n", bdata( archive_path )
-   );
-
-   sql_retval = sqlite3_open( bdata( db_path ), &db );
-   CATCH_NONZERO(
-      sql_retval, retval, 1, "Unable to open database: %s\n", bdata( db_path )
    );
 
    while( (entry = readdir( dir )) != NULL ) {
@@ -333,7 +486,7 @@ int storage_inventory_update_walk( bstring db_path, bstring archive_path ) {
          continue;
       } else if( DT_REG == entry->d_type ) {
          /* Record file attributes. */
-         storage_inventory_update_file( db, subdir_path );
+         storage_inventory_update_file( db_path, subdir_path );
       } else if( DT_LNK == entry->d_type ) {
          /* TODO: Record link existence. */
       }
@@ -342,10 +495,6 @@ int storage_inventory_update_walk( bstring db_path, bstring archive_path ) {
 cleanup:
 
    bdestroy( subdir_path );
-
-   if( NULL != db ) {
-      sqlite3_close( db );
-   }
 
    return retval;
 }
