@@ -139,6 +139,8 @@ int storage_select_file(
       bdata( db_path )
    );
 
+reprepquery:
+
    /* Search for existing entries for file. */
    sql_retval = sqlite3_prepare_v2(
       db,
@@ -147,6 +149,7 @@ int storage_select_file(
       &query,
       NULL
    );
+   CATCH_BUSY( sql_retval, query, reprepquery );
    CATCH_NONZERO(
       sql_retval, existing_found, -1, "Unable to prepare SQL statement."
    );
@@ -159,7 +162,12 @@ int storage_select_file(
    );
 
    do {
+
+requery:
+
       sql_retval = sqlite3_step( query );
+      CATCH_BUSY( sql_retval, query, requery );
+
       switch( sql_retval ) {
          case SQLITE_DONE:
             break;
@@ -217,6 +225,8 @@ int storage_inventory_dedupe_find( bstring db_path, storage_group** objects ) {
       bdata( db_path )
    );
 
+reprepquery:
+
    /* Search for existing entries for file. */
    sql_retval = sqlite3_prepare_v2(
       db,
@@ -225,6 +235,7 @@ int storage_inventory_dedupe_find( bstring db_path, storage_group** objects ) {
       &query,
       NULL
    );
+   CATCH_BUSY( sql_retval, query, reprepquery );
    CATCH_NONZERO(
       sql_retval, dupes_found, -1,
       "Unable to prepare SQL statement: %s\n",
@@ -232,7 +243,12 @@ int storage_inventory_dedupe_find( bstring db_path, storage_group** objects ) {
    );
 
    do {
+
+requery:
+
       sql_retval = sqlite3_step( query );
+      CATCH_BUSY( sql_retval, query, requery );
+
       switch( sql_retval ) {
          case SQLITE_DONE:
             break;
@@ -332,6 +348,8 @@ int storage_inventory_update_file( bstring db_path, bstring file_path ) {
          );
       }
 
+reprepinsert:
+
       /* Insert the file record. */
       sql_retval = sqlite3_prepare_v2(
          db,
@@ -340,6 +358,7 @@ int storage_inventory_update_file( bstring db_path, bstring file_path ) {
          &insert,
          NULL
       );
+      CATCH_BUSY( sql_retval, insert, reprepinsert );
       CATCH_NONZERO(
          sql_retval, retval, 1, "Unable to prepare SQL statement."
       );
@@ -371,7 +390,10 @@ int storage_inventory_update_file( bstring db_path, bstring file_path ) {
          sql_retval, retval, 1, "Unable to bind SQL parameter: hash"
       );
 
-      sqlite3_step( insert );
+reinsert:
+
+      sql_retval = sqlite3_step( insert );
+      CATCH_BUSY( sql_retval, insert, reinsert );
 
    } else {
       /* Test inode/date and test hash if different. */
@@ -390,6 +412,8 @@ int storage_inventory_update_file( bstring db_path, bstring file_path ) {
          file_hash = storage_hash_file( file_path );
             printf( "New hash: %" PRIu64 "\n", file_hash );
 
+reprepupdate:
+
          /* Update the file record. */
          sql_retval = sqlite3_prepare_v2(
             db,
@@ -398,6 +422,7 @@ int storage_inventory_update_file( bstring db_path, bstring file_path ) {
             &insert,
             NULL
          );
+         CATCH_BUSY( sql_retval, insert, reprepupdate );
          CATCH_NONZERO(
             sql_retval, retval, 1, "Unable to prepare SQL statement."
          );
@@ -429,7 +454,11 @@ int storage_inventory_update_file( bstring db_path, bstring file_path ) {
             sql_retval, retval, 1, "Unable to bind SQL parameter: path"
          );
 
-         sqlite3_step( insert );
+reupdate:
+
+         sql_retval = sqlite3_step( insert );
+         CATCH_BUSY( sql_retval, insert, reupdate );
+
       } else {
          if( g_verbose ) {
             printf( "Entry OK for file: %s\n", bdata( file_path ) );

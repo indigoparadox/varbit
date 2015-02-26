@@ -47,5 +47,17 @@
       goto cleanup; \
    }
 
+#define CATCH_BUSY( local_retval, statement, label ) \
+   if( SQLITE_BUSY == local_retval ) { \
+      DBG_ERR( "Database busy. Retrying INSERT...\n" ); \
+      sleep( 5 ); \
+      goto label; \
+   } else if( SQLITE_LOCKED == local_retval ) { \
+      DBG_ERR( "Database locked. Retrying INSERT...\n" ); \
+      sleep( 5 ); \
+      sqlite3_reset( statement ); \
+      goto label; \
+   }
+
 #endif /* UTIL_H */
 
