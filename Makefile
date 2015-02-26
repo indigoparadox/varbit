@@ -1,4 +1,5 @@
 
+CFLAGS := -DTHREADSAFE=1
 
 varbit: varbit.o storage.o
 	gcc -l sqlite3 -l bstrlib -o $@ $^

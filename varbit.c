@@ -22,6 +22,7 @@
 #include "storage.h"
 
 int g_verbose = 0;
+int g_force = 0;
 
 int main( int argc, char** argv ) {
    int arg_iter;
@@ -29,11 +30,13 @@ int main( int argc, char** argv ) {
    bstring arc_path = NULL;
    int retval = 0;
    int storage_retval = 0;
+   int scan = 0;
    int dedup = 0;
    int prune = 0;
+   storage_group* dupe_file_groups = NULL;
 
    /* Parse command line arguments. */
-   while( ((arg_iter = getopt( argc, argv, "hvd:a:l" )) != -1) ) {
+   while( ((arg_iter = getopt( argc, argv, "hvfd:a:slp" )) != -1) ) {
       switch( arg_iter ) {
          case 'h':
 
@@ -55,12 +58,20 @@ int main( int argc, char** argv ) {
             g_verbose = 1;
             break;
 
+         case 'f':
+            g_force = 1;
+            break;
+
          case 'd':
             db_path = bformat( "%s", optarg );
             break;
 
          case 'a':
             arc_path = bformat( "%s", optarg );
+            break;
+
+         case 's':
+            scan = 1;
             break;
 
          case 'l':
@@ -79,22 +90,31 @@ int main( int argc, char** argv ) {
 
    /* Ensure sanity. */
    CATCH_NULL( db_path, retval, 1, "No database specified. Aborting.\n" );
-   CATCH_NULL( arc_path, retval, 1, "No archive specified. Aborting.\n" );
+   if( scan ) {
+      CATCH_NULL( arc_path, retval, 1, "No archive specified. Aborting.\n" );
+   }
 
    /* TODO: Perform operations other than update. */
 
-   storage_retval = storage_ensure_database( db_path );
-   CATCH_NONZERO(
-      storage_retval, retval, 1, "Error ensuring database tables. Aborting.\n"
-   );
+   if( scan ) {
+      storage_retval = storage_ensure_database( db_path );
+      CATCH_NONZERO(
+         storage_retval, retval, 1,
+         "Error ensuring database tables. Aborting.\n"
+      );
 
-   storage_retval = storage_inventory_update_walk( db_path, arc_path );
-   CATCH_NONZERO(
-      storage_retval, retval, 1, "Error updating inventory. Aborting.\n"
-   );
+      storage_retval = storage_inventory_update_walk( db_path, arc_path );
+      CATCH_NONZERO(
+         storage_retval, retval, 1, "Error updating inventory. Aborting.\n"
+      );
+   }
 
    if( dedup ) {
-
+      storage_retval =
+         storage_inventory_dedupe_find( db_path, &dupe_file_groups );
+      CATCH_NONZERO(
+         storage_retval, retval, 1, "Error searching for dupes. Aborting. \n"
+      );
    }
 
    if( prune ) {

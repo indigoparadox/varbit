@@ -49,9 +49,17 @@ typedef struct {
    bstring encrypted_filename;
 } storage_file;
 
+typedef struct {
+   storage_file* file_objects;
+   int count;
+   bstring hash_contents;
+} storage_group;
+
+sqlite3* storage_open_database( bstring, int );
 int storage_ensure_database( bstring );
 int storage_inventory_prune( bstring );
-int storage_inventory_update_file( sqlite3*, bstring );
+int storage_inventory_dedupe_find( bstring, storage_group** );
+int storage_inventory_update_file( bstring, bstring );
 int storage_inventory_update_walk( bstring, bstring );
 #ifdef STORAGE_HASH_MURMUR
 uint32_t storage_hash_file( bstring );
