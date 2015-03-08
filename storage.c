@@ -197,6 +197,10 @@ cleanup:
 }
 
 int storage_inventory_prune( bstring db_path ) {
+
+   /* TODO: Make a temporary hardlink first and check success before deleting
+    *       anything.                                                         */
+
 }
 
 int storage_inventory_dedupe_find( bstring db_path, storage_group** objects ) {
