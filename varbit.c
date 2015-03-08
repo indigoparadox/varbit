@@ -124,6 +124,9 @@ int main( int argc, char** argv ) {
    }
 
    if( prune ) {
+      /* TODO: If an archive path was specified, limit pruning to that path
+       *       using LIKE for the query.
+       */
       storage_retval = storage_inventory_prune( db_path );
       CATCH_NONZERO(
          storage_retval, retval, 1, "Error pruning. Aborting. \n"
