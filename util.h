@@ -17,6 +17,8 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+#include <stdio.h>
+
 #define DBG_ERR( ... ) fprintf( stderr, __VA_ARGS__ )
 
 #define CATCH_NONZERO( local_retval, proc_retval, val_arg, ... ) \
