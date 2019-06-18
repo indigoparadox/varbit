@@ -23,10 +23,14 @@
 #include "archive.h"
 #include "db.h"
 
-int g_verbose = 0;
 #ifdef USE_THREADPOOL
+#include "thpool.h"
+
+#define THREADPOOL_THREADS 4
+
 threadpool g_thpool = NULL;
 #endif /* USE_THREADPOOL */
+int g_verbose = 0;
 
 int main( int argc, char** argv ) {
    int arg_iter;
@@ -91,13 +95,17 @@ int main( int argc, char** argv ) {
    );
 
 #ifdef USE_THREADPOOL
-   g_thpool = threadpool_init( THREADPOOL_THREADS );
+   g_thpool = thpool_init( THREADPOOL_THREADS );
 #endif /* USE_THREADPOOL */
 
    storage_retval = archive_inventory_update_walk( db, arc_path );
    CATCH_NONZERO(
       storage_retval, retval, 1, "Error updating inventory. Aborting.\n"
    );
+
+#ifdef USE_THREADPOOL
+   thpool_wait( g_thpool );
+#endif /* USE_THREADPOOL */
 
 cleanup:
 
