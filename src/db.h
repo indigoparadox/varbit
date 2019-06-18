@@ -12,6 +12,7 @@
 
 int db_ensure_database( DB_TYPE );
 int db_inventory_update_file( DB_TYPE db, bstring file_path );
+void db_list_dupes( DB_TYPE db );
 
 #endif /* DB_H */
 

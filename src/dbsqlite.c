@@ -100,6 +100,7 @@ static int db_sql_storage_file( sqlite3_stmt* row, storage_file* object ) {
          TODO: Encrypted contents hash?
    */
 
+   /* Translate result into storage_file object. */
    bassignformat( object->path, "%s", sqlite3_column_text( row, 0 ) );
    bassignformat( object->hardlink_path, "%s", sqlite3_column_text( row, 1 ) );
    object->mdate = sqlite3_column_int64( row, 2 );
@@ -304,5 +305,26 @@ cleanup:
    }
 
    return retval;
+}
+
+int db_print_dupe( void* arg, int cols, char** strs, char** col_names ) {
+   /* TODO: Add to a list of duplicate hashes. */
+   printf( "%s\n", strs[0] );
+   return 0;
+}
+
+void db_list_dupes( sqlite3* db ) {
+   char* sql_err = NULL;
+
+   sqlite3_exec(
+      db,  
+      "select hash_contents from files group by hash_contents "
+         "having count(*) > 1;",
+      db_print_dupe,
+      NULL,
+      &sql_err
+   );
+
+   
 }
 
