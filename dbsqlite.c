@@ -149,12 +149,12 @@ int db_inventory_update_file( sqlite3* db, bstring file_path ) {
       &query,
       NULL
    );
-   CATCH_NONZERO( sql_retval, retval, 1, "Unable to prepare SQL statement." );
+   CATCH_NONZERO( sql_retval, retval, 1, "Unable to prepare SQL statement.\n" );
 
    sql_retval = sqlite3_bind_text(
       query, 1, bdata( file_path ), blength( file_path ), SQLITE_STATIC
    );
-   CATCH_NONZERO( sql_retval, retval, 1, "Unable to bind SQL parameter." );
+   CATCH_NONZERO( sql_retval, retval, 1, "Unable to bind SQL parameter.\n" );
 
    do {
       sql_retval = sqlite3_step( query );
@@ -200,34 +200,34 @@ int db_inventory_update_file( sqlite3* db, bstring file_path ) {
          NULL
       );
       CATCH_NONZERO(
-         sql_retval, retval, 1, "Unable to prepare SQL statement."
+         sql_retval, retval, 1, "Unable to prepare SQL statement.\n"
       );
 
       sql_retval = sqlite3_bind_text(
          insert, 1, bdata( file_path ), blength( file_path ), SQLITE_STATIC
       );
       CATCH_NONZERO(
-         sql_retval, retval, 1, "Unable to bind SQL parameter: path"
+         sql_retval, retval, 1, "Unable to bind SQL parameter: path\n"
       );
 
       sql_retval = sqlite3_bind_int64( insert, 2, file_stat.st_mtime );
       CATCH_NONZERO(
-         sql_retval, retval, 1, "Unable to bind SQL parameter: mtime"
+         sql_retval, retval, 1, "Unable to bind SQL parameter: mtime\n"
       );
 
       sql_retval = sqlite3_bind_int64( insert, 3, file_stat.st_ino );
       CATCH_NONZERO(
-         sql_retval, retval, 1, "Unable to bind SQL parameter: inode"
+         sql_retval, retval, 1, "Unable to bind SQL parameter: inode\n"
       );
 
       sql_retval = sqlite3_bind_int64( insert, 4, file_stat.st_size );
       CATCH_NONZERO(
-         sql_retval, retval, 1, "Unable to bind SQL parameter: size"
+         sql_retval, retval, 1, "Unable to bind SQL parameter: size\n"
       );
 
       sql_retval = sqlite3_bind_int64( insert, 5, file_hash );
       CATCH_NONZERO(
-         sql_retval, retval, 1, "Unable to bind SQL parameter: hash"
+         sql_retval, retval, 1, "Unable to bind SQL parameter: hash\n"
       );
 
       sqlite3_step( insert );
@@ -258,34 +258,34 @@ int db_inventory_update_file( sqlite3* db, bstring file_path ) {
             NULL
          );
          CATCH_NONZERO(
-            sql_retval, retval, 1, "Unable to prepare SQL statement."
+            sql_retval, retval, 1, "Unable to prepare SQL statement.\n"
          );
 
          sql_retval = sqlite3_bind_int64( insert, 1, file_stat.st_mtime );
          CATCH_NONZERO(
-            sql_retval, retval, 1, "Unable to bind SQL parameter: mtime."
+            sql_retval, retval, 1, "Unable to bind SQL parameter: mtime.\n"
          );
 
          sql_retval = sqlite3_bind_int64( insert, 2, file_stat.st_ino );
          CATCH_NONZERO(
-            sql_retval, retval, 1, "Unable to bind SQL parameter: inode."
+            sql_retval, retval, 1, "Unable to bind SQL parameter: inode.\n"
          );
 
          sql_retval = sqlite3_bind_int64( insert, 3, file_stat.st_size );
          CATCH_NONZERO(
-            sql_retval, retval, 1, "Unable to bind SQL parameter: size."
+            sql_retval, retval, 1, "Unable to bind SQL parameter: size.\n"
          );
 
          sql_retval = sqlite3_bind_int64( insert, 4, file_hash );
          CATCH_NONZERO(
-            sql_retval, retval, 1, "Unable to bind SQL parameter: hash"
+            sql_retval, retval, 1, "Unable to bind SQL parameter: hash\n"
          );
 
          sql_retval = sqlite3_bind_text(
             insert, 5, bdata( file_path ), blength( file_path ), SQLITE_STATIC
          );
          CATCH_NONZERO(
-            sql_retval, retval, 1, "Unable to bind SQL parameter: path"
+            sql_retval, retval, 1, "Unable to bind SQL parameter: path\n"
          );
 
          sqlite3_step( insert );

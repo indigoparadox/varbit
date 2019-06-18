@@ -19,8 +19,26 @@
 #include <dirent.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <stdlib.h>
 
 #include "util.h"
+
+#ifdef USE_THREADPOOL
+#include "thpool.h"
+
+extern threadpool g_thpool;
+#endif /* USE_THREADPOOL */
+
+struct archive_path_db {
+   DB_TYPE db;
+   bstring subdir_path;
+};
+
+void db_inventory_update_file_thd( struct archive_path_db* thargs ) {
+   db_inventory_update_file( thargs->db, thargs->subdir_path );
+   bdestroy( thargs->subdir_path );
+   free( thargs );
+}
 
 int archive_inventory_update_walk( DB_TYPE db, bstring archive_path ) {
    int retval = 0;
@@ -29,6 +47,9 @@ int archive_inventory_update_walk( DB_TYPE db, bstring archive_path ) {
    struct dirent* entry = NULL;
    bstring subdir_path = bfromcstr( "" );
    char* archive_path_c = NULL;
+#ifdef USE_THREADPOOL
+   struct archive_path_db* thargs = NULL;
+#endif /* USE_THREADPOOL */
 
    archive_path_c = bdata( archive_path );
    dir = opendir( archive_path_c );
@@ -54,7 +75,14 @@ int archive_inventory_update_walk( DB_TYPE db, bstring archive_path ) {
          continue;
       } else if( DT_REG == entry->d_type ) {
          /* Record file attributes. */
+#ifdef USE_THREADPOOL
+         thargs = calloc( 1, sizeof( thargs ) );
+         thargs->subdir_path = bstrcpy( subdir_path );
+         thargs->db = db;
+         thpool_add_work( g_thpool, (void*)db_inventory_update_file_thd, (void*)thargs );
+#else
          db_inventory_update_file( db, subdir_path );
+#endif /* USE_THREADPOOL */
       } else if( DT_LNK == entry->d_type ) {
          /* TODO: Record link existence. */
       }
