@@ -22,10 +22,10 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sqlite3.h>
-#include <bstrlib.h>
 #include <stdint.h>
 #include <inttypes.h>
 
+#include "bstrlib.h"
 #include "util.h"
 
 /* #define STORAGE_HASH_MURMUR 1 */
