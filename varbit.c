@@ -20,7 +20,6 @@
 
 #include "bstrlib.h"
 #include "util.h"
-#include "storage.h"
 #include "archive.h"
 #include "db.h"
 
