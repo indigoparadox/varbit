@@ -18,6 +18,15 @@
 
 extern int g_verbose;
 
+
+const struct tagbstring g_temp_inv_query = bsStatic(
+   "SELECT * FROM files WHERE path=?" );
+const struct tagbstring g_temp_inv_insert = bsStatic(
+   "INSERT INTO files (path, mdate, inode, size, hash_contents) "
+      "VALUES(?, ?, ?, ?, ?)" );
+const struct tagbstring g_temp_inv_update = bsStatic(
+   "UPDATE files SET mdate=?, inode=?, size=?, hash_contents=? WHERE path=?" );
+
 /* End MurmurHash. */
 
 int storage_ensure_database( bstring db_path ) {
@@ -98,14 +107,6 @@ int storage_inventory_update_file( sqlite3* db, bstring file_path ) {
    sqlite3_stmt* query;
    sqlite3_stmt* insert = NULL;
    int sql_retval = 0;
-   bstring query_string = bfromcstr( "SELECT * FROM files WHERE path=?" );
-   bstring insert_string = bfromcstr(
-      "INSERT INTO files (path, mdate, inode, size, hash_contents) " \
-         "VALUES(?, ?, ?, ?, ?)"
-   );
-   bstring update_string = bfromcstr(
-      "UPDATE files SET mdate=?, inode=?, size=?, hash_contents=? WHERE path=?"
-   );
    storage_file file_object;
    int object_retval = 0;
    uint64_t file_hash = 0;
@@ -128,8 +129,8 @@ int storage_inventory_update_file( sqlite3* db, bstring file_path ) {
    /* Search for existing entries for file. */
    sql_retval = sqlite3_prepare_v2(
       db,
-      bdata( query_string ),
-      blength( query_string ),
+      (const char*)(g_temp_inv_query.data),
+      g_temp_inv_query.slen,
       &query,
       NULL
    );
@@ -178,8 +179,8 @@ int storage_inventory_update_file( sqlite3* db, bstring file_path ) {
       /* Insert the file record. */
       sql_retval = sqlite3_prepare_v2(
          db,
-         bdata( insert_string ),
-         blength( insert_string ),
+         (const char*)(g_temp_inv_insert.data),
+         g_temp_inv_insert.slen,
          &insert,
          NULL
       );
@@ -236,8 +237,8 @@ int storage_inventory_update_file( sqlite3* db, bstring file_path ) {
          /* Update the file record. */
          sql_retval = sqlite3_prepare_v2(
             db,
-            bdata( update_string ),
-            blength( update_string ),
+            (const char*)(g_temp_inv_update.data),
+            g_temp_inv_update.slen,
             &insert,
             NULL
          );
@@ -278,8 +279,6 @@ int storage_inventory_update_file( sqlite3* db, bstring file_path ) {
 
 cleanup:
 
-   bdestroy( query_string );
-   bdestroy( insert_string );
    storage_free_storage_file( &file_object );
    sqlite3_finalize( query );
    if( NULL != insert ) {
@@ -343,6 +342,10 @@ cleanup:
 
    if( NULL != db ) {
       sqlite3_close( db );
+   }
+
+   if( NULL != dir ) {
+      closedir( dir );
    }
 
    return retval;
@@ -485,13 +488,14 @@ int storage_sql_storage_file( sqlite3_stmt* row, storage_file* object ) {
          TODO: Encrypted contents hash?
    */
 
-   object->path = bformat( "%s", sqlite3_column_text( row, 0 ) );
-   object->hardlink_path = bformat( "%s", sqlite3_column_text( row, 1 ) );
+   bassignformat( object->path, "%s", sqlite3_column_text( row, 0 ) );
+   bassignformat( object->hardlink_path, "%s", sqlite3_column_text( row, 1 ) );
    object->mdate = sqlite3_column_int64( row, 2 );
    object->inode = sqlite3_column_int64( row, 3 );
    object->size = sqlite3_column_int64( row, 4 );
    object->hash_contents = sqlite3_column_int64( row, 5 );
-   object->encrypted_filename = bformat( "%s", sqlite3_column_text( row, 6 ) );
+   bassignformat( object->encrypted_filename,
+      "%s", sqlite3_column_text( row, 6 ) );
 
 cleanup:
    return retval;
