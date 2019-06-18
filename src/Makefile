@@ -20,8 +20,10 @@ varbit: $(OBJECTS)
 varbit-threads: $(OBJECTS) thpool.o
 	$(CC) -o $@ $(addprefix $(OBJDIR)/,$^) $(LDFLAGS)
 
+.PHONY: clean
+
 clean:
-	rm varbit ; rm *.o
+	rm varbit ; rm varbit-threads ; rm -rf ../obj
 
 %.o: %.c
 	$(MD) $(OBJDIR)/$(dir $@)
