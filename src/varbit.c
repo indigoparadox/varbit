@@ -23,6 +23,12 @@
 #include "archive.h"
 #include "db.h"
 
+enum varbit_action {
+   ACTION_NONE = 0,
+   ACTION_SCAN,
+   ACTION_DEDUP
+};
+
 #ifdef USE_THREADPOOL
 #include "thpool.h"
 
@@ -40,15 +46,23 @@ int main( int argc, char** argv ) {
    int storage_retval = 0;
    int sql_retval = 0;
    sqlite3* db;
+   enum varbit_action action = ACTION_NONE;
 
    /* Parse command line arguments. */
-   while( ((arg_iter = getopt( argc, argv, "hvd:a:" )) != -1) ) {
+   while( ((arg_iter = getopt( argc, argv, "sphvd:a:" )) != -1) ) {
       switch( arg_iter ) {
          case 'h':
 
             printf( "Usage: varbit -d <db_path> -a <arc_path> [-v]\n" );
             printf( "This tool will build a database of hashes for all\n" );
             printf( "files in the specified archive directory.\n" );
+            printf( "\n" );
+            printf( "Actions (Must have at least one):\n" );
+            printf( "\n" );
+            printf( "-s\t\tScan.\n" );
+            printf( "-p\t\tDedup.\n" );
+            printf( "\n" );
+            printf( "Options:\n" );
             printf( "\n" );
             printf( "-d <db_path>\tThe location of the files database.\n" );
             printf( "-a <arc_path>\tThe directory of the file archive to " \
@@ -70,6 +84,14 @@ int main( int argc, char** argv ) {
 
          case 'a':
             arc_path = bformat( "%s", optarg );
+            break;
+
+         case 's':
+            action = ACTION_SCAN;
+            break;
+
+         case 'p':
+            action = ACTION_DEDUP;
             break;
 
          case ':':
@@ -98,11 +120,24 @@ int main( int argc, char** argv ) {
    g_thpool = thpool_init( THREADPOOL_THREADS );
 #endif /* USE_THREADPOOL */
 
-   storage_retval = archive_inventory_update_walk( db, arc_path );
-   CATCH_NONZERO(
-      storage_retval, retval, 1, "Error updating inventory. Aborting.\n"
-   );
+   switch( action ) {
+      case ACTION_SCAN:
+         storage_retval = archive_inventory_update_walk( db, arc_path );
+         CATCH_NONZERO(
+            storage_retval, retval, 1, "Error updating inventory. Aborting.\n"
+         );
+         break;
 
+      case ACTION_DEDUP:
+         db_list_dupes( db );
+         break;
+
+      case ACTION_NONE:
+      default:
+         break;
+   }
+
+   /* Wait for worker threads to finish up. */
 #ifdef USE_THREADPOOL
    thpool_wait( g_thpool );
 #endif /* USE_THREADPOOL */
