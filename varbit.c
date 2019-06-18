@@ -16,12 +16,18 @@
 
 #include <stdio.h>
 #include <unistd.h>
+#include <sqlite3.h>
 
 #include "bstrlib.h"
 #include "util.h"
 #include "storage.h"
+#include "archive.h"
+#include "db.h"
 
 int g_verbose = 0;
+#ifdef USE_THREADPOOL
+threadpool g_thpool = NULL;
+#endif /* USE_THREADPOOL */
 
 int main( int argc, char** argv ) {
    int arg_iter;
@@ -29,6 +35,8 @@ int main( int argc, char** argv ) {
    bstring arc_path = NULL;
    int retval = 0;
    int storage_retval = 0;
+   int sql_retval = 0;
+   sqlite3* db;
 
    /* Parse command line arguments. */
    while( ((arg_iter = getopt( argc, argv, "hvd:a:" )) != -1) ) {
@@ -71,14 +79,23 @@ int main( int argc, char** argv ) {
    CATCH_NULL( db_path, retval, 1, "No database specified. Aborting.\n" );
    CATCH_NULL( arc_path, retval, 1, "No archive specified. Aborting.\n" );
 
+   sql_retval = sqlite3_open( bdata( db_path ), &db );
+   CATCH_NONZERO(
+      sql_retval, retval, 1, "Unable to open database: %s\n", bdata( db_path )
+   );
+
    /* TODO: Perform operations other than update. */
 
-   storage_retval = storage_ensure_database( db_path );
+   storage_retval = db_ensure_database( db );
    CATCH_NONZERO(
       storage_retval, retval, 1, "Error ensuring database tables. Aborting.\n"
    );
 
-   storage_retval = storage_inventory_update_walk( db_path, arc_path );
+#ifdef USE_THREADPOOL
+   g_thpool = threadpool_init( THREADPOOL_THREADS );
+#endif /* USE_THREADPOOL */
+
+   storage_retval = archive_inventory_update_walk( db, arc_path );
    CATCH_NONZERO(
       storage_retval, retval, 1, "Error updating inventory. Aborting.\n"
    );
@@ -91,6 +108,10 @@ cleanup:
 
    if( NULL != arc_path ) {
       bdestroy( arc_path );
+   }
+
+   if( NULL != db ) {
+      sqlite3_close( db );
    }
 
    return retval;
