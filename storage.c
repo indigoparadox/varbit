@@ -93,7 +93,7 @@ int storage_inventory_update_file( sqlite3* db, bstring file_path ) {
    struct stat file_stat;
    int stat_retval = 0;
    int retval = 0;
-   char* err_msg = NULL;
+   /* char* err_msg = NULL; */
    int existing_found = 0;
    sqlite3_stmt* query;
    sqlite3_stmt* insert = NULL;
@@ -109,6 +109,7 @@ int storage_inventory_update_file( sqlite3* db, bstring file_path ) {
    storage_file file_object;
    int object_retval = 0;
    uint64_t file_hash = 0;
+   char* file_path_c = NULL;
 
    /* Setup the file object. */
    memset( &file_object, 0, sizeof( file_object ) );
@@ -118,7 +119,8 @@ int storage_inventory_update_file( sqlite3* db, bstring file_path ) {
    file_hash = 0;
 
    /* Get file information. */
-   stat_retval = stat( bdata( file_path ), &file_stat );
+   file_path_c = bdata( file_path );
+   stat_retval = stat( file_path_c, &file_stat );
    CATCH_NONZERO(
       stat_retval, retval, 1, "Unable to open file: %s\n", bdata( file_path )
    );
@@ -298,8 +300,10 @@ int storage_inventory_update_walk( bstring db_path, bstring archive_path ) {
    bstring subdir_path = bfromcstr( "" );
    sqlite3* db = NULL;
    int sql_retval = 0;
+   char* archive_path_c = NULL;
 
-   dir = opendir( bdata( archive_path ) );
+   archive_path_c = bdata( archive_path );
+   dir = opendir( archive_path_c );
    CATCH_NULL(
       dir, retval, 1, "Unable to open directory: %s\n", bdata( archive_path )
    );
@@ -431,8 +435,8 @@ uint64_t storage_hash_file( bstring file_path ) {
    FILE* file_handle;
    uint8_t buffer[1] = { 0 };
    size_t read_bytes = 0;
-   const uint64_t fnv_prime_64 = 1099511628211;
-   const uint64_t fnv_offset_basis_64 = 14695981039346656037;
+   const uint64_t fnv_prime_64 = 1099511628211U;
+   const uint64_t fnv_offset_basis_64 = 14695981039346656037U;
    uint64_t hash = fnv_offset_basis_64;
 
    /* Open file. */
