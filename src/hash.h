@@ -7,7 +7,7 @@
 #include "bstrlib.h"
 
 #define STORAGE_HASH_FNV 1
-#define STORAGE_HASH_MURMUR 1
+/* #define STORAGE_HASH_MURMUR 1 */
 #define STORAGE_HASH_SHA256 1
 
 #ifdef STORAGE_HASH_MURMUR
@@ -37,9 +37,9 @@ enum hash_algo {
 #endif /* STORAGE_HASH_SHA256 */
 };
 
-uint32_t hash_file_murmur( const bstring file_path );
-uint64_t hash_file_fnv( const bstring file_path );
-int hash_file_sha256( const bstring file_path, uint8_t hash[32] );
+uint32_t hash_murmur( const void* input, size_t len );
+uint64_t hash_fnv( const void* input, size_t len );
+void hash_sha256( uint8_t hash[32], const void* input, size_t len );
 bstring hash_make_printable( uint8_t hash[HASH_MAX_LEN], enum hash_algo type );
 
 #endif /* HASH_H */

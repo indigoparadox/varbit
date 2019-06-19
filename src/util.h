@@ -28,6 +28,13 @@
       goto cleanup; \
    }
 
+#define CATCH_ZERO( local_retval, proc_retval, val_arg, ... ) \
+   if( !local_retval ) { \
+      DBG_ERR( __VA_ARGS__ ); \
+      proc_retval = val_arg; \
+      goto cleanup; \
+   }
+
 #define CATCH_NULL( local_retval, proc_retval, val_arg, ... ) \
    if( NULL == local_retval ) { \
       DBG_ERR( __VA_ARGS__ ); \
