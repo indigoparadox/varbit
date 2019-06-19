@@ -14,7 +14,7 @@
 struct db_hash_list {
    int len;
    int sz;
-   uint8_t** list;
+   bstring* list;
 };
 
 int db_ensure_database( DB_TYPE );

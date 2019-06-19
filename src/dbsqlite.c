@@ -339,19 +339,31 @@ int db_print_dupe( void* arg, int cols, char** strs, char** col_names ) {
    int new_sz = 0;
    int retval = 0;
    
-   if( hash_list->len + 1 >= hash_list->sz ) {
+   if( NULL == hash_list->list ) {
+      hash_list->list = calloc( 6, sizeof( bstring ) );
+      if( NULL != hash_list->list ) {
+         hash_list->sz = 6;
+      } else {
+         retval = -1;
+         goto cleanup;
+      }
+   } else if( hash_list->len + 1 >= hash_list->sz ) {
       new_sz = hash_list->sz * 2;
-      hash_list->list = realloc( hash_list->list, new_sz );
+      hash_list->list =
+         realloc( hash_list->list, new_sz * sizeof( bstring ) );
       if( NULL != hash_list ) {
          hash_list->sz = new_sz;
       } else {
          hash_list->sz = 0;
          retval = -1;
+         goto cleanup;
       }
    }
 
-   /* printf( "%s\n", strs[0] ); */
-   /*hash_list->list[hash_list->len] =  */
+   hash_list->list[hash_list->len] = bfromcstr( strs[0] );
+   hash_list->len++;
+
+cleanup:
 
    return retval;
 }
