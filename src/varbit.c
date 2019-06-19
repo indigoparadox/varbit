@@ -49,6 +49,7 @@ int main( int argc, char** argv ) {
    sqlite3* db;
    enum varbit_action action = ACTION_NONE;
    enum hash_algo hash_type = VBHASH_FNV;
+   struct db_hash_list dupes = { 0 };
 
    /* Parse command line arguments. */
    while( ((arg_iter = getopt( argc, argv, "sphvd:a:x:" )) != -1) ) {
@@ -144,7 +145,7 @@ int main( int argc, char** argv ) {
          break;
 
       case ACTION_DEDUP:
-         db_list_dupes( db );
+         db_list_dupes( db, &dupes );
          break;
 
       case ACTION_NONE:

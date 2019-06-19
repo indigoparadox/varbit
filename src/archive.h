@@ -15,7 +15,7 @@ typedef struct {
    int mdate;
    ino_t inode;
    off_t size;
-   uint8_t hash_contents[HASH_MAX_LEN];
+   bstring hash_contents;
    enum hash_algo hash_type;
    bstring encrypted_filename;
 } storage_file;
