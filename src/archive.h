@@ -7,16 +7,7 @@
 
 #include "bstrlib.h"
 #include "db.h"
-
-#define STORAGE_HASH_FNV 1
-
-#ifdef STORAGE_HASH_MURMUR
-#define STORAGE_HASH_BUFFER_SIZE 4
-#define STORAGE_HASH_SEED 32
-#endif /* STORAGE_HASH_MURMUR */
-
-#ifdef STORAGE_HASH_FNV
-#endif /* STORAGE_HASH_FNV */
+#include "hash.h"
 
 typedef struct {
    bstring path;
@@ -25,16 +16,13 @@ typedef struct {
    ino_t inode;
    off_t size;
    uint32_t hash_contents;
+   enum hash_algo hash_type;
    bstring encrypted_filename;
 } storage_file;
 
-int archive_inventory_update_walk( DB_TYPE, bstring );
-#ifdef STORAGE_HASH_MURMUR
-uint32_t archive_hash_file( bstring );
-#endif /* STORAGE_HASH_MURMUR */
-#ifdef STORAGE_HASH_FNV
-uint64_t archive_hash_file( bstring );
-#endif /* STORAGE_HASH_FNV */
+int archive_inventory_update_walk(
+   DB_TYPE db, bstring archive_path, enum hash_algo hash_type );
+uint64_t archive_hash_file( bstring file_path, enum hash_algo hash_type );
 void archive_free_storage_file( storage_file* );
 
 #endif /* ARCHIVE_H */

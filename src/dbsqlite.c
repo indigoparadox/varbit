@@ -16,10 +16,11 @@ extern int g_verbose;
 const struct tagbstring g_temp_inv_query = bsStatic(
    "SELECT * FROM files WHERE path=?" );
 const struct tagbstring g_temp_inv_insert = bsStatic(
-   "INSERT INTO files (path, mdate, inode, size, hash_contents) "
-      "VALUES(?, ?, ?, ?, ?)" );
+   "INSERT INTO files (path, mdate, inode, size, hash_contents, hash_type) "
+      "VALUES(?, ?, ?, ?, ?, ?)" );
 const struct tagbstring g_temp_inv_update = bsStatic(
-   "UPDATE files SET mdate=?, inode=?, size=?, hash_contents=? WHERE path=?" );
+   "UPDATE files SET mdate=?, inode=?, size=?, hash_contents=?, hash_type=? "
+      "WHERE path=?" );
 
 int db_ensure_database( sqlite3* db ) {
    int sql_retval = 0;
@@ -38,6 +39,7 @@ int db_ensure_database( sqlite3* db ) {
          "inode INT NOT NULL," \
          "size INT NOT NULL, " \
          "hash_contents BIGINT," \
+         "hash_type INT NOT NULL," \
          "encrypted_filename VARCHAR( 255 )" \
          ");",
       NULL,
@@ -107,14 +109,17 @@ static int db_sql_storage_file( sqlite3_stmt* row, storage_file* object ) {
    object->inode = sqlite3_column_int64( row, 3 );
    object->size = sqlite3_column_int64( row, 4 );
    object->hash_contents = sqlite3_column_int64( row, 5 );
+   object->hash_type = sqlite3_column_int64( row, 6 );
    bassignformat( object->encrypted_filename,
-      "%s", sqlite3_column_text( row, 6 ) );
+      "%s", sqlite3_column_text( row, 7 ) );
 
 cleanup:
    return retval;
 }
 
-int db_inventory_update_file( sqlite3* db, bstring file_path ) {
+int db_inventory_update_file(
+   sqlite3* db, bstring file_path, enum hash_algo hash_type
+) {
    struct stat file_stat;
    int stat_retval = 0;
    int retval = 0;
@@ -182,7 +187,7 @@ int db_inventory_update_file( sqlite3* db, bstring file_path ) {
       retval = 1;
       goto cleanup;
    } else if( 1 > existing_found ) {
-      file_hash = archive_hash_file( file_path );
+      file_hash = archive_hash_file( file_path, hash_type );
 
       if( g_verbose ) {
          printf(
@@ -231,6 +236,11 @@ int db_inventory_update_file( sqlite3* db, bstring file_path ) {
          sql_retval, retval, 1, "Unable to bind SQL parameter: hash\n"
       );
 
+      sql_retval = sqlite3_bind_int64( insert, 6, hash_type );
+      CATCH_NONZERO(
+         sql_retval, retval, 1, "Unable to bind SQL parameter: hash_type\n"
+      );
+
       sqlite3_step( insert );
 
    } else {
@@ -247,7 +257,7 @@ int db_inventory_update_file( sqlite3* db, bstring file_path ) {
             );
          }
 
-         file_hash = archive_hash_file( file_path );
+         file_hash = archive_hash_file( file_path, hash_type );
             printf( "New hash: %" PRIu64 "\n", file_hash );
 
          /* Update the file record. */
@@ -282,8 +292,13 @@ int db_inventory_update_file( sqlite3* db, bstring file_path ) {
             sql_retval, retval, 1, "Unable to bind SQL parameter: hash\n"
          );
 
+         sql_retval = sqlite3_bind_int64( insert, 5, hash_type );
+         CATCH_NONZERO(
+            sql_retval, retval, 1, "Unable to bind SQL parameter: hash_type\n"
+         );
+
          sql_retval = sqlite3_bind_text(
-            insert, 5, bdata( file_path ), blength( file_path ), SQLITE_STATIC
+            insert, 6, bdata( file_path ), blength( file_path ), SQLITE_STATIC
          );
          CATCH_NONZERO(
             sql_retval, retval, 1, "Unable to bind SQL parameter: path\n"
