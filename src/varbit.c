@@ -22,6 +22,7 @@
 #include "util.h"
 #include "archive.h"
 #include "db.h"
+#include "hash.h"
 
 enum varbit_action {
    ACTION_NONE = 0,
@@ -47,9 +48,10 @@ int main( int argc, char** argv ) {
    int sql_retval = 0;
    sqlite3* db;
    enum varbit_action action = ACTION_NONE;
+   enum hash_algo hash_type = VBHASH_FNV;
 
    /* Parse command line arguments. */
-   while( ((arg_iter = getopt( argc, argv, "sphvd:a:" )) != -1) ) {
+   while( ((arg_iter = getopt( argc, argv, "sphvd:a:x:" )) != -1) ) {
       switch( arg_iter ) {
          case 'h':
 
@@ -67,6 +69,8 @@ int main( int argc, char** argv ) {
             printf( "-d <db_path>\tThe location of the files database.\n" );
             printf( "-a <arc_path>\tThe directory of the file archive to " \
                "catalog.\n" );
+            printf(
+               "-x [fnv|mirror|sha256]\tHash to use for comparing files." );
             printf( "-v\t\tBe verbose.\n" );
             printf( "\n" );
             printf( "The database and archive paths are required.\n" );
@@ -122,7 +126,8 @@ int main( int argc, char** argv ) {
 
    switch( action ) {
       case ACTION_SCAN:
-         storage_retval = archive_inventory_update_walk( db, arc_path );
+         storage_retval = archive_inventory_update_walk(
+            db, arc_path, hash_type );
          CATCH_NONZERO(
             storage_retval, retval, 1, "Error updating inventory. Aborting.\n"
          );

@@ -1,5 +1,5 @@
 
-OBJECTS := varbit.o bstrlib.o archive.o dbsqlite.o
+OBJECTS := varbit.o bstrlib.o archive.o dbsqlite.o hash.o
 
 CFLAGS := -g -pg -Wall -Werror -DUSE_SQLITE
 LDFLAGS := $(shell pkg-config --libs sqlite3)
