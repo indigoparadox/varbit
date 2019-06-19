@@ -7,6 +7,7 @@
 #include <sqlite3.h>
 #include <stdint.h>
 #include <inttypes.h>
+#include <assert.h>
 
 #include "util.h"
 #include "archive.h"
@@ -38,7 +39,7 @@ int db_ensure_database( sqlite3* db ) {
          "mdate INT NOT NULL," \
          "inode INT NOT NULL," \
          "size INT NOT NULL, " \
-         "hash_contents BIGINT," \
+         "hash_contents BLOB," \
          "hash_type INT NOT NULL," \
          "encrypted_filename VARCHAR( 255 )" \
          ");",
@@ -84,6 +85,7 @@ cleanup:
 
 static int db_sql_storage_file( sqlite3_stmt* row, storage_file* object ) {
    int retval = 0;
+   const uint8_t* hash_temp = NULL;
 
    if( 7 > sqlite3_column_count( row ) ) {
       DBG_ERR( "Unable to convert row: Too few columns.\n" );
@@ -97,7 +99,7 @@ static int db_sql_storage_file( sqlite3_stmt* row, storage_file* object ) {
          "mdate INT NOT NULL," \
          "inode INT NOT NULL," \
          "size INT NOT NULL, " \
-         "hash_contents BIGINT," \
+         "hash_contents BLOB," \
          "encrypted_filename VARCHAR( 255 )" \
          TODO: Encrypted contents hash?
    */
@@ -108,10 +110,14 @@ static int db_sql_storage_file( sqlite3_stmt* row, storage_file* object ) {
    object->mdate = sqlite3_column_int64( row, 2 );
    object->inode = sqlite3_column_int64( row, 3 );
    object->size = sqlite3_column_int64( row, 4 );
-   object->hash_contents = sqlite3_column_int64( row, 5 );
    object->hash_type = sqlite3_column_int64( row, 6 );
    bassignformat( object->encrypted_filename,
       "%s", sqlite3_column_text( row, 7 ) );
+
+   /* Grab the hash. */
+   assert( sqlite3_column_bytes( row, 5 ) == HASH_MAX_LEN );
+   hash_temp = sqlite3_column_blob( row, 5 );
+   memcpy( object->hash_contents, hash_temp, HASH_MAX_LEN );
 
 cleanup:
    return retval;
@@ -130,15 +136,16 @@ int db_inventory_update_file(
    int sql_retval = 0;
    storage_file file_object;
    int object_retval = 0;
-   uint64_t file_hash = 0;
    char* file_path_c = NULL;
+   uint8_t file_hash[HASH_MAX_LEN];
+   bstring hash_printable = NULL;
 
    /* Setup the file object. */
    memset( &file_object, 0, sizeof( file_object ) );
    file_object.path = bfromcstr( "" );
    file_object.hardlink_path = bfromcstr( "" );
    file_object.encrypted_filename = bfromcstr( "" );
-   file_hash = 0;
+   memset( file_hash, '\0', HASH_MAX_LEN );
 
    /* Get file information. */
    file_path_c = bdata( file_path );
@@ -187,14 +194,16 @@ int db_inventory_update_file(
       retval = 1;
       goto cleanup;
    } else if( 1 > existing_found ) {
-      file_hash = archive_hash_file( file_path, hash_type );
+      archive_hash_file( file_path, hash_type, file_hash );
 
       if( g_verbose ) {
+         hash_printable = hash_make_printable( file_hash, hash_type );
          printf(
-            "No existing entry found for: %s: %" PRIu64 "\n",
+            "No existing entry found for: %s: %s\n",
             bdata( file_path ),
-            file_hash
+            bdata( hash_printable )
          );
+         bdestroy( hash_printable );
       }
 
       /* Insert the file record. */
@@ -231,7 +240,8 @@ int db_inventory_update_file(
          sql_retval, retval, 1, "Unable to bind SQL parameter: size\n"
       );
 
-      sql_retval = sqlite3_bind_int64( insert, 5, file_hash );
+      sql_retval = sqlite3_bind_blob(
+         insert, 5, file_hash, HASH_MAX_LEN, SQLITE_STATIC );
       CATCH_NONZERO(
          sql_retval, retval, 1, "Unable to bind SQL parameter: hash\n"
       );
@@ -257,8 +267,8 @@ int db_inventory_update_file(
             );
          }
 
-         file_hash = archive_hash_file( file_path, hash_type );
-            printf( "New hash: %" PRIu64 "\n", file_hash );
+         archive_hash_file( file_path, hash_type, file_hash );
+         /* printf( "New hash: %" PRIu64 "\n", file_hash ); */
 
          /* Update the file record. */
          sql_retval = sqlite3_prepare_v2(
@@ -287,7 +297,8 @@ int db_inventory_update_file(
             sql_retval, retval, 1, "Unable to bind SQL parameter: size.\n"
          );
 
-         sql_retval = sqlite3_bind_int64( insert, 4, file_hash );
+         sql_retval = sqlite3_bind_blob(
+            insert, 4, file_hash, HASH_MAX_LEN, SQLITE_STATIC );
          CATCH_NONZERO(
             sql_retval, retval, 1, "Unable to bind SQL parameter: hash\n"
          );

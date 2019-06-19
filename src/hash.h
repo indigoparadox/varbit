@@ -20,6 +20,8 @@
 #define SHA256_TOTAL_LEN_LEN 8
 #endif /* STORAGE_HASH_SHA256 */
 
+#define HASH_MAX_LEN 32
+
 /* Assign numbers to hashes so DBs can be compared across versions. */
 enum hash_algo {
 #ifdef STORAGE_HASH_FNV
@@ -35,6 +37,8 @@ enum hash_algo {
 
 uint32_t hash_file_murmur( const bstring file_path );
 uint64_t hash_file_fnv( const bstring file_path );
+int hash_file_sha256( const bstring file_path, uint8_t hash[32] );
+bstring hash_make_printable( uint8_t hash[HASH_MAX_LEN], enum hash_algo type );
 
 #endif /* HASH_H */
 

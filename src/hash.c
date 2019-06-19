@@ -348,19 +348,22 @@ void calc_sha256( uint8_t hash[32], const void* input, size_t len ) {
    }
 }
 
-uint64_t hash_file_sha256( const bstring file_path ) {
+int hash_file_sha256( const bstring file_path, uint8_t hash[32] ) {
+   FILE* file_handle;
+   uint8_t buffer[1] = { 0 };
+   size_t read_bytes = 0;
+   int retval = 0;
+
    /* Open file. */
    file_handle = fopen( bdata( file_path ), "rb" );
    CATCH_NULL( 
-      file_handle, hash, 0, "Unable to open file: %s\n", bdata( file_path )
+      file_handle, retval, 0, "Unable to open file: %s\n", bdata( file_path )
    );
 
    do {
       read_bytes = fread( buffer, sizeof( uint8_t ), 1, file_handle );
 
-      /* Hash this block. */
-      hash *= fnv_prime_64;
-      hash ^= *buffer;
+      calc_sha256( hash, buffer, 1 );
  
    } while( 1 == read_bytes );
 
@@ -370,8 +373,38 @@ cleanup:
       fclose( file_handle );
    }
 
-   return hash;
+   return retval;
 }
 
 #endif /* STORAGE_HASH_SHA256 */
+
+bstring hash_make_printable( uint8_t hash[HASH_MAX_LEN], enum hash_algo type ) {
+   bstring out = NULL;
+   bstring btmpchar = NULL;
+   int i = 0;
+   int hash_len = 0;
+   uint8_t* cp = NULL;
+
+   switch( type ) {
+   case VBHASH_FNV:
+      hash_len = sizeof( uint64_t );
+      break;
+   case VBHASH_MURMUR:
+      hash_len = sizeof( uint32_t );
+      break;
+   case VBHASH_SHA256:
+      hash_len = 32;
+      break;
+   }
+
+   out = bfromcstr( "" );
+   btmpchar = bfromcstr( "" );
+   for( i = 0 ; hash_len > i ; i++ ) {
+      cp = &(hash[i]);
+      bassignformat( btmpchar, "%x", *cp );
+      bconcat( out, btmpchar );
+   }
+
+   return out;
+}
 

@@ -15,14 +15,15 @@ typedef struct {
    int mdate;
    ino_t inode;
    off_t size;
-   uint32_t hash_contents;
+   uint8_t hash_contents[HASH_MAX_LEN];
    enum hash_algo hash_type;
    bstring encrypted_filename;
 } storage_file;
 
 int archive_inventory_update_walk(
    DB_TYPE db, bstring archive_path, enum hash_algo hash_type );
-uint64_t archive_hash_file( bstring file_path, enum hash_algo hash_type );
+void archive_hash_file(
+   bstring file_path, enum hash_algo hash_type, uint8_t hash[HASH_MAX_LEN] );
 void archive_free_storage_file( storage_file* );
 
 #endif /* ARCHIVE_H */

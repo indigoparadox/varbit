@@ -90,6 +90,16 @@ int main( int argc, char** argv ) {
             arc_path = bformat( "%s", optarg );
             break;
 
+         case 'x':
+            if( 0 == strcmp( "fnv", optarg ) ) {
+               hash_type = VBHASH_FNV;
+            } else if( 0 == strcmp( "murmur", optarg ) ) {
+               hash_type = VBHASH_MURMUR;
+            } else if( 0 == strcmp( "sha256", optarg ) ) {
+               hash_type = VBHASH_SHA256;
+            }
+            break;
+
          case 's':
             action = ACTION_SCAN;
             break;
