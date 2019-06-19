@@ -15,6 +15,11 @@
 #define STORAGE_HASH_SEED 32
 #endif /* STORAGE_HASH_MURMUR */
 
+#ifdef STORAGE_HASH_SHA256
+#define SHA256_CHUNK_SIZE 64
+#define SHA256_TOTAL_LEN_LEN 8
+#endif /* STORAGE_HASH_SHA256 */
+
 /* Assign numbers to hashes so DBs can be compared across versions. */
 enum hash_algo {
 #ifdef STORAGE_HASH_FNV
