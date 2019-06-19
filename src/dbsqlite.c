@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <assert.h>
+#include <stdlib.h>
 
 #include "util.h"
 #include "archive.h"
@@ -39,7 +40,7 @@ int db_ensure_database( sqlite3* db ) {
          "mdate INT NOT NULL," \
          "inode INT NOT NULL," \
          "size INT NOT NULL, " \
-         "hash_contents BLOB," \
+         "hash_contents VARCHAR( 64 )," \
          "hash_type INT NOT NULL," \
          "encrypted_filename VARCHAR( 255 )" \
          ");",
@@ -85,9 +86,8 @@ cleanup:
 
 static int db_sql_storage_file( sqlite3_stmt* row, storage_file* object ) {
    int retval = 0;
-   const uint8_t* hash_temp = NULL;
 
-   if( 7 > sqlite3_column_count( row ) ) {
+   if( 8 > sqlite3_column_count( row ) ) {
       DBG_ERR( "Unable to convert row: Too few columns.\n" );
       retval = 1;
       goto cleanup;
@@ -110,14 +110,11 @@ static int db_sql_storage_file( sqlite3_stmt* row, storage_file* object ) {
    object->mdate = sqlite3_column_int64( row, 2 );
    object->inode = sqlite3_column_int64( row, 3 );
    object->size = sqlite3_column_int64( row, 4 );
+   bassignformat( object->hash_contents,
+      "%s",  sqlite3_column_text( row, 5 ) );
    object->hash_type = sqlite3_column_int64( row, 6 );
    bassignformat( object->encrypted_filename,
       "%s", sqlite3_column_text( row, 7 ) );
-
-   /* Grab the hash. */
-   assert( sqlite3_column_bytes( row, 5 ) == HASH_MAX_LEN );
-   hash_temp = sqlite3_column_blob( row, 5 );
-   memcpy( object->hash_contents, hash_temp, HASH_MAX_LEN );
 
 cleanup:
    return retval;
@@ -196,14 +193,13 @@ int db_inventory_update_file(
    } else if( 1 > existing_found ) {
       archive_hash_file( file_path, hash_type, file_hash );
 
+      hash_printable = hash_make_printable( file_hash, hash_type );
       if( g_verbose ) {
-         hash_printable = hash_make_printable( file_hash, hash_type );
          printf(
             "No existing entry found for: %s: %s\n",
             bdata( file_path ),
             bdata( hash_printable )
          );
-         bdestroy( hash_printable );
       }
 
       /* Insert the file record. */
@@ -240,8 +236,9 @@ int db_inventory_update_file(
          sql_retval, retval, 1, "Unable to bind SQL parameter: size\n"
       );
 
-      sql_retval = sqlite3_bind_blob(
-         insert, 5, file_hash, HASH_MAX_LEN, SQLITE_STATIC );
+      sql_retval = sqlite3_bind_text(
+         insert, 5, bdata( hash_printable ), blength( hash_printable ),
+         SQLITE_STATIC );
       CATCH_NONZERO(
          sql_retval, retval, 1, "Unable to bind SQL parameter: hash\n"
       );
@@ -268,7 +265,9 @@ int db_inventory_update_file(
          }
 
          archive_hash_file( file_path, hash_type, file_hash );
-         /* printf( "New hash: %" PRIu64 "\n", file_hash ); */
+
+         hash_printable = hash_make_printable( file_hash, hash_type );
+         printf( "New hash: %s\n", bdata( hash_printable ) );
 
          /* Update the file record. */
          sql_retval = sqlite3_prepare_v2(
@@ -297,8 +296,9 @@ int db_inventory_update_file(
             sql_retval, retval, 1, "Unable to bind SQL parameter: size.\n"
          );
 
-         sql_retval = sqlite3_bind_blob(
-            insert, 4, file_hash, HASH_MAX_LEN, SQLITE_STATIC );
+         sql_retval = sqlite3_bind_text(
+            insert, 4, bdata( hash_printable ), blength( hash_printable ),
+            SQLITE_STATIC );
          CATCH_NONZERO(
             sql_retval, retval, 1, "Unable to bind SQL parameter: hash\n"
          );
@@ -329,28 +329,50 @@ cleanup:
          DBG_ERR( "INSERT/UPDATE statement failed: %s\n", bdata( file_path ) );
       }
    }
+   bdestroy( hash_printable );
 
    return retval;
 }
 
 int db_print_dupe( void* arg, int cols, char** strs, char** col_names ) {
-   /* TODO: Add to a list of duplicate hashes. */
-   printf( "%s\n", strs[0] );
-   return 0;
+   struct db_hash_list* hash_list = (struct db_hash_list*)arg;
+   int new_sz = 0;
+   int retval = 0;
+   
+   if( hash_list->len + 1 >= hash_list->sz ) {
+      new_sz = hash_list->sz * 2;
+      hash_list->list = realloc( hash_list->list, new_sz );
+      if( NULL != hash_list ) {
+         hash_list->sz = new_sz;
+      } else {
+         hash_list->sz = 0;
+         retval = -1;
+      }
+   }
+
+   /* printf( "%s\n", strs[0] ); */
+   /*hash_list->list[hash_list->len] =  */
+
+   return retval;
 }
 
-void db_list_dupes( sqlite3* db ) {
-   char* sql_err = NULL;
+int db_list_dupes( sqlite3* db, struct db_hash_list* hash_list ) {
+   char* err_msg = NULL;
+   int count = 0;
 
    sqlite3_exec(
       db,  
       "select hash_contents from files group by hash_contents "
          "having count(*) > 1;",
       db_print_dupe,
-      NULL,
-      &sql_err
+      hash_list,
+      &err_msg
    );
-
    
+   if( NULL != err_msg ) {
+      sqlite3_free( err_msg );
+   }
+
+   return count;
 }
 

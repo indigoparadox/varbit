@@ -21,6 +21,8 @@
 #endif /* STORAGE_HASH_SHA256 */
 
 #define HASH_MAX_LEN 32
+#define HASH_MAX_STRING_LEN (HASH_MAX_LEN * 2)
+#define HASH_MAX_STRING_LEN_STRING #HASH_MAX_STRING_LEN
 
 /* Assign numbers to hashes so DBs can be compared across versions. */
 enum hash_algo {
