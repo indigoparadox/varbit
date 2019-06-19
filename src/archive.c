@@ -105,25 +105,33 @@ cleanup:
    return retval;
 }
 
-uint64_t archive_hash_file( bstring file_path, enum hash_algo hash_type ) {
+void archive_hash_file(
+   bstring file_path, enum hash_algo hash_type, uint8_t hash[HASH_MAX_LEN]
+) {
+   uint32_t hash_temp_32 = 0;
+   uint64_t hash_temp_64 = 0;
+
    switch( hash_type ) {
 #ifdef STORAGE_HASH_FNV
    case VBHASH_FNV:
-      return hash_file_fnv( file_path );
+      hash_temp_64 = hash_file_fnv( file_path );
+      memcpy( hash, &hash_temp_64, sizeof( uint64_t ) );
+      break;
 #endif /* STORAGE_HASH_FNV */
 
 #ifdef STORAGE_HASH_MURMUR
    case VBHASH_MURMUR:
-      return hash_file_murmur( file_path );
+      hash_temp_32 = hash_file_murmur( file_path );
+      memcpy( hash, &hash_temp_32, sizeof( uint32_t ) );
+      break;
 #endif /* STORAGE_HASH_MURMUR */
 
 #ifdef STORAGE_HASH_SHA256
    case VBHASH_SHA256:
-      return 0;
+      hash_file_sha256( file_path, hash );
+      return;
 #endif /* STORAGE_HASH_SHA256 */
    }
-
-   return 0;
 }
 
 void archive_free_storage_file( storage_file* object ) {
