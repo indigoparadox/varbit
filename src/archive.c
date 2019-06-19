@@ -16,9 +16,14 @@
 
 #include "archive.h"
 
+#include <unistd.h>
 #include <dirent.h>
 #include <sys/types.h>
 #include <stdlib.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <sys/stat.h>
 
 #include "util.h"
 #include "hash.h"
@@ -105,33 +110,74 @@ cleanup:
    return retval;
 }
 
-void archive_hash_file(
+int archive_hash_file(
    bstring file_path, enum hash_algo hash_type, uint8_t hash[HASH_MAX_LEN]
 ) {
+#ifdef STORAGE_HASH_MURMUR
    uint32_t hash_temp_32 = 0;
+#endif /* STORAGE_HASH_MURMUR */
    uint64_t hash_temp_64 = 0;
+   const uint8_t* file_mapped = NULL;
+   size_t file_len = 0;
+   char* file_path_c = NULL;
+   struct stat file_stat;
+   int stat_retval = 0;
+   int file_desc = 0;
+   int retval = 0;
+
+   /* Get file information. */
+   file_path_c = bdata( file_path );
+   stat_retval = stat( file_path_c, &file_stat );
+   CATCH_NONZERO(
+      stat_retval, retval, -1, "Unable to open file: %s\n", bdata( file_path )
+   );
+   file_len = file_stat.st_size;
+
+   /* Open file. */
+   file_desc = open( file_path_c, O_RDONLY );
+   CATCH_ZERO(
+      file_desc, retval, -2, "Unable to open file: %s\n", bdata( file_path )
+   );
+
+   file_mapped = mmap( 0, file_len, PROT_READ, MAP_PRIVATE, file_desc, 0 );
+   if( MAP_FAILED == file_mapped ) {
+      DBG_ERR( "Unable to map file: %s\n", bdata( file_path ) );
+      retval = -3;
+      goto cleanup;
+   }
 
    switch( hash_type ) {
 #ifdef STORAGE_HASH_FNV
    case VBHASH_FNV:
-      hash_temp_64 = hash_file_fnv( file_path );
+      hash_temp_64 = hash_fnv( file_mapped, file_len );
       memcpy( hash, &hash_temp_64, sizeof( uint64_t ) );
       break;
 #endif /* STORAGE_HASH_FNV */
 
 #ifdef STORAGE_HASH_MURMUR
    case VBHASH_MURMUR:
-      hash_temp_32 = hash_file_murmur( file_path );
+      hash_temp_32 = hash_murmur( file_mapped, file_len );
       memcpy( hash, &hash_temp_32, sizeof( uint32_t ) );
       break;
 #endif /* STORAGE_HASH_MURMUR */
 
 #ifdef STORAGE_HASH_SHA256
    case VBHASH_SHA256:
-      hash_file_sha256( file_path, hash );
-      return;
+      hash_sha256( hash, file_mapped, file_len );
+      break;
 #endif /* STORAGE_HASH_SHA256 */
    }
+cleanup:
+   
+   if( MAP_FAILED != file_mapped && NULL != file_mapped ) {
+      munmap( (void*)file_mapped, file_len );
+   }
+
+   if( 0 != file_desc ) {
+      close( file_desc );
+   }
+
+   return retval;
 }
 
 void archive_free_storage_file( storage_file* object ) {

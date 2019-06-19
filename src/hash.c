@@ -5,17 +5,13 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/stat.h>
 
 #ifdef STORAGE_HASH_MURMUR
 
-uint32_t hash_file_murmur( const bstring file_path ) {
-   FILE* file_handle;
+uint32_t hash_murmur( const void* input, size_t len ) {
    char buffer[STORAGE_HASH_BUFFER_SIZE] = { 0 };
    /* const uint32_t* buffer_block = (const uint32_t*) buffer; */
    size_t read_bytes = 0;
-   struct stat file_stat;
-   int stat_retval = 0;
    static const uint32_t c1 = 0xcc9e2d51;
    static const uint32_t c2 = 0x1b873593;
    static const uint32_t r1 = 15;
@@ -26,19 +22,7 @@ uint32_t hash_file_murmur( const bstring file_path ) {
    int nblocks = 0;
    uint32_t block_iter;
    uint32_t k1 = 0;
-   char* file_path_c = NULL;
 
-   /* Get file information. */
-   file_path_c = bdata( file_path );
-   stat_retval = stat( file_path_c, &file_stat );
-   CATCH_NONZERO(
-      stat_retval, hash, 0, "Unable to open file: %s\n", bdata( file_path )
-   );
-
-   file_handle = fopen( bdata( file_path ), "rb" );
-   CATCH_NULL( 
-      file_handle, hash, 0, "Unable to open file: %s\n", bdata( file_path )
-   );
 
    do {
       read_bytes = fread(
@@ -46,6 +30,7 @@ uint32_t hash_file_murmur( const bstring file_path ) {
       );
 
       /* Hash this block. */
+      /* XXX: What block? This is unassigned! */
       block_iter *= c1;
       block_iter = (block_iter << r1) | (block_iter >> (32 - r1));
       block_iter *= c2;
@@ -92,35 +77,19 @@ cleanup:
 
 #ifdef STORAGE_HASH_FNV
 
-uint64_t hash_file_fnv( const bstring file_path ) {
-   FILE* file_handle;
-   uint8_t buffer[1] = { 0 };
-   size_t read_bytes = 0;
+uint64_t hash_fnv( const void* input, size_t len ) {
    const uint64_t fnv_prime_64 = 1099511628211U;
    const uint64_t fnv_offset_basis_64 = 14695981039346656037U;
    uint64_t hash = fnv_offset_basis_64;
+   size_t i = 0;
+   const uint8_t* input_bytes = (const uint8_t*)input;
 
-   /* Open file. */
-   file_handle = fopen( bdata( file_path ), "rb" );
-   CATCH_NULL( 
-      file_handle, hash, 0, "Unable to open file: %s\n", bdata( file_path )
-   );
-
-   do {
-      read_bytes = fread( buffer, sizeof( uint8_t ), 1, file_handle );
-
+   for( i = 0 ; len > i ; i++ ) {
       /* Hash this block. */
       hash *= fnv_prime_64;
-      hash ^= *buffer;
- 
-   } while( 1 == read_bytes );
-
-cleanup:
-
-   if( NULL != file_handle ) {
-      fclose( file_handle );
+      hash ^= input_bytes[i];
    }
-
+ 
    return hash;
 }
 
@@ -245,7 +214,7 @@ static int calc_sha256_chunk(
  *   operates on arrays of bytes.
  *   In particular, the len parameter is a number of bytes.
  */
-void calc_sha256( uint8_t hash[32], const void* input, size_t len ) {
+void hash_sha256( uint8_t hash[32], const void* input, size_t len ) {
    uint32_t w[64];
    const uint8_t* p = NULL;
    uint32_t ah[8];
@@ -348,34 +317,6 @@ void calc_sha256( uint8_t hash[32], const void* input, size_t len ) {
    }
 }
 
-int hash_file_sha256( const bstring file_path, uint8_t hash[32] ) {
-   FILE* file_handle;
-   uint8_t buffer[1] = { 0 };
-   size_t read_bytes = 0;
-   int retval = 0;
-
-   /* Open file. */
-   file_handle = fopen( bdata( file_path ), "rb" );
-   CATCH_NULL( 
-      file_handle, retval, 0, "Unable to open file: %s\n", bdata( file_path )
-   );
-
-   do {
-      read_bytes = fread( buffer, sizeof( uint8_t ), 1, file_handle );
-
-      calc_sha256( hash, buffer, 1 );
- 
-   } while( 1 == read_bytes );
-
-cleanup:
-
-   if( NULL != file_handle ) {
-      fclose( file_handle );
-   }
-
-   return retval;
-}
-
 #endif /* STORAGE_HASH_SHA256 */
 
 bstring hash_make_printable( uint8_t hash[HASH_MAX_LEN], enum hash_algo type ) {
@@ -389,9 +330,11 @@ bstring hash_make_printable( uint8_t hash[HASH_MAX_LEN], enum hash_algo type ) {
    case VBHASH_FNV:
       hash_len = sizeof( uint64_t );
       break;
+#ifdef STORAGE_HASH_MURMUR
    case VBHASH_MURMUR:
       hash_len = sizeof( uint32_t );
       break;
+#endif /* STORAGE_HASH_MURMUR */
    case VBHASH_SHA256:
       hash_len = 32;
       break;

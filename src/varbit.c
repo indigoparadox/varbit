@@ -94,8 +94,10 @@ int main( int argc, char** argv ) {
          case 'x':
             if( 0 == strcmp( "fnv", optarg ) ) {
                hash_type = VBHASH_FNV;
+#ifdef STORAGE_HASH_MURMUR
             } else if( 0 == strcmp( "murmur", optarg ) ) {
                hash_type = VBHASH_MURMUR;
+#endif /* STORAGE_HASH_MURMUR */
             } else if( 0 == strcmp( "sha256", optarg ) ) {
                hash_type = VBHASH_SHA256;
             }
