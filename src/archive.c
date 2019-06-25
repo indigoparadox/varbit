@@ -27,6 +27,8 @@
 
 #include "util.h"
 #include "hash.h"
+#include "dbsqlite.h"
+#include "dbmongo.h"
 
 #ifdef USE_THREADPOOL
 #include "thpool.h"
@@ -35,20 +37,33 @@ extern threadpool g_thpool;
 #endif /* USE_THREADPOOL */
 
 struct archive_path_db {
-   DB_TYPE db;
+   void* db;
+   enum db db_type;
    bstring subdir_path;
    enum hash_algo hash_type;
 };
 
 void db_inventory_update_file_thd( struct archive_path_db* thargs ) {
-   db_inventory_update_file(
-      thargs->db, thargs->subdir_path, thargs->hash_type );
+   switch( thargs->db_type ) {
+#ifdef USE_SQLITE
+   case VBDB_SQLITE:
+      db_sqlite_inventory_update_file(
+         thargs->db, thargs->subdir_path, thargs->hash_type );
+      break;
+#endif /* USE_SQLITE */
+#ifdef USE_SQLITE
+   case VBDB_MONGO:
+      db_mongo_inventory_update_file(
+         thargs->db, thargs->subdir_path, thargs->hash_type );
+      break;
+#endif /* USE_MONGO */
+   }
    bdestroy( thargs->subdir_path );
    free( thargs );
 }
 
 int archive_inventory_update_walk(
-   DB_TYPE db, bstring archive_path, enum hash_algo hash_type
+   void* db, enum db db_type, bstring archive_path, enum hash_algo hash_type
 ) {
    int retval = 0;
    int bstr_retval = 0;
@@ -80,7 +95,7 @@ int archive_inventory_update_walk(
 
       if( DT_DIR == entry->d_type ) {
          /* Walk subdirectories. */
-         archive_inventory_update_walk( db, subdir_path, hash_type );
+         archive_inventory_update_walk( db, db_type, subdir_path, hash_type );
          continue;
       } else if( DT_REG == entry->d_type ) {
          /* Record file attributes. */
@@ -88,11 +103,23 @@ int archive_inventory_update_walk(
          thargs = calloc( 1, sizeof( thargs ) );
          thargs->subdir_path = bstrcpy( subdir_path );
          thargs->db = db;
+         thargs->db_type = db_type;
          thargs->hash_type = hash_type;
          thpool_add_work(
             g_thpool, (void*)db_inventory_update_file_thd, (void*)thargs );
 #else
-         db_inventory_update_file( db, subdir_path, hash_type );
+         switch( db_type ) {
+#ifdef USE_SQLITE
+         case VBDB_SQLITE:
+            db_sqlite_inventory_update_file( db, subdir_path, hash_type );
+            break;
+#endif /* USE_SQLITE */
+#ifdef USE_MONGO
+         case VBDB_MONGO:
+            db_mongo_inventory_update_file( db, subdir_path, hash_type );
+            break;
+#endif /* USE_MONGO */
+         }
 #endif /* USE_THREADPOOL */
       } else if( DT_LNK == entry->d_type ) {
          /* TODO: Record link existence. */

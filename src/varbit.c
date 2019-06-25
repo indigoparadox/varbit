@@ -16,12 +16,12 @@
 
 #include <stdio.h>
 #include <unistd.h>
-#include <sqlite3.h>
 
 #include "bstrlib.h"
 #include "util.h"
 #include "archive.h"
-#include "db.h"
+#include "dbmongo.h"
+#include "dbsqlite.h"
 #include "hash.h"
 
 enum varbit_action {
@@ -39,6 +39,23 @@ threadpool g_thpool = NULL;
 #endif /* USE_THREADPOOL */
 int g_verbose = 0;
 
+static void db_list_dupes(
+   void* db, enum db db_type, struct db_hash_list* dupes
+) {
+   switch( db_type ) {
+#ifdef USE_SQLITE
+   case VBDB_SQLITE:
+      db_sqlite_list_dupes( db, dupes );
+      break;
+#endif /* USE_SQLITE */
+#ifdef USE_MONGO
+   case VBDB_MONGO:
+      db_mongo_list_dupes( db, dupes );
+      break;
+#endif /* USE_MONGO */
+   }
+}
+
 int main( int argc, char** argv ) {
    int arg_iter;
    bstring db_path = NULL;
@@ -49,10 +66,11 @@ int main( int argc, char** argv ) {
    sqlite3* db;
    enum varbit_action action = ACTION_NONE;
    enum hash_algo hash_type = VBHASH_FNV;
+   enum db db_type = VBDB_SQLITE;
    struct db_hash_list dupes = { 0 };
 
    /* Parse command line arguments. */
-   while( ((arg_iter = getopt( argc, argv, "sphvd:a:x:" )) != -1) ) {
+   while( ((arg_iter = getopt( argc, argv, "b:sphvd:a:x:" )) != -1) ) {
       switch( arg_iter ) {
          case 'h':
 
@@ -71,7 +89,8 @@ int main( int argc, char** argv ) {
             printf( "-a <arc_path>\tThe directory of the file archive to " \
                "catalog.\n" );
             printf(
-               "-x [fnv|mirror|sha256]\tHash to use for comparing files." );
+               "-x [fnv|mirror|sha256]\tHash to use for comparing files.\n" );
+            printf( "-b [sqlite|mongo]\tDatabase to use.\n" );
             printf( "-v\t\tBe verbose.\n" );
             printf( "\n" );
             printf( "The database and archive paths are required.\n" );
@@ -91,7 +110,23 @@ int main( int argc, char** argv ) {
             arc_path = bformat( "%s", optarg );
             break;
 
-         case 'x':
+         case 'b':
+#ifdef USE_SQLITE
+            if( 0 == strcmp( "sqlite", optarg ) ) {
+               db_type = VBDB_SQLITE;
+            } else
+#endif /* USE_SQLITE */
+#ifdef USE_MONGO
+            if( 0 == strcmp( "mongo", optarg ) ) {
+               db_type = VBDB_MONGO;
+            } else
+#endif /* USE_MONGO */
+            {
+               /* Invalid DB specified. */
+            }
+            break;
+
+        case 'x':
             if( 0 == strcmp( "fnv", optarg ) ) {
                hash_type = VBHASH_FNV;
 #ifdef STORAGE_HASH_MURMUR
@@ -121,17 +156,29 @@ int main( int argc, char** argv ) {
    CATCH_NULL( db_path, retval, 1, "No database specified. Aborting.\n" );
    CATCH_NULL( arc_path, retval, 1, "No archive specified. Aborting.\n" );
 
-   sql_retval = sqlite3_open( bdata( db_path ), &db );
-   CATCH_NONZERO(
-      sql_retval, retval, 1, "Unable to open database: %s\n", bdata( db_path )
-   );
+   switch( db_type ) {
+#ifdef USE_SQLITE
+   case VBDB_SQLITE:
+      sql_retval = sqlite3_open( bdata( db_path ), &db );
+      CATCH_NONZERO(
+         sql_retval, retval, 1, "Unable to open database: %s\n", bdata( db_path )
+      );
 
-   /* TODO: Perform operations other than update. */
+      /* TODO: Perform operations other than update. */
 
-   storage_retval = db_ensure_database( db );
-   CATCH_NONZERO(
-      storage_retval, retval, 1, "Error ensuring database tables. Aborting.\n"
-   );
+      storage_retval = db_sqlite_ensure_database( db );
+      CATCH_NONZERO(
+         storage_retval, retval, 1, "Error ensuring database tables. Aborting.\n"
+      );
+
+      break;
+#endif /* USE_SQLITE */
+#ifdef USE_MONGO
+   case VBDB_MONGO:
+      /* TODO */
+      break;
+#endif /* USE_MONGO */
+   }
 
 #ifdef USE_THREADPOOL
    g_thpool = thpool_init( THREADPOOL_THREADS );
@@ -140,14 +187,14 @@ int main( int argc, char** argv ) {
    switch( action ) {
       case ACTION_SCAN:
          storage_retval = archive_inventory_update_walk(
-            db, arc_path, hash_type );
+            db, db_type, arc_path, hash_type );
          CATCH_NONZERO(
             storage_retval, retval, 1, "Error updating inventory. Aborting.\n"
          );
          break;
 
       case ACTION_DEDUP:
-         db_list_dupes( db, &dupes );
+         db_list_dupes( db, db_type, &dupes );
          break;
 
       case ACTION_NONE:

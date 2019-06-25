@@ -1,7 +1,7 @@
 
-OBJECTS := varbit.o bstrlib.o archive.o dbsqlite.o hash.o
+OBJECTS := varbit.o bstrlib.o archive.o dbsqlite.o hash.o dbmongo.o
 
-CFLAGS := -g -pg -Wall -Werror -DUSE_SQLITE --std=gnu89
+CFLAGS := -g -pg -Wall -Werror -DUSE_SQLITE --std=gnu89 -DUSE_MONGO $(shell pkg-config --cflags libmongo-client)
 LDFLAGS := $(shell pkg-config --libs sqlite3)
 
 MD=mkdir -v -p
