@@ -24,7 +24,7 @@ const struct tagbstring g_temp_inv_update = bsStatic(
    "UPDATE files SET mdate=?, inode=?, size=?, hash_contents=?, hash_type=? "
       "WHERE path=?" );
 
-int db_ensure_database( sqlite3* db ) {
+int db_sqlite_ensure_database( sqlite3* db ) {
    int sql_retval = 0;
    int retval = 0;
    char* err_msg = NULL;
@@ -84,7 +84,7 @@ cleanup:
    return retval;
 }
 
-static int db_sql_storage_file( sqlite3_stmt* row, storage_file* object ) {
+static int db_sqlite_sql_storage_file( sqlite3_stmt* row, storage_file* object ) {
    int retval = 0;
 
    if( 8 > sqlite3_column_count( row ) ) {
@@ -120,7 +120,7 @@ cleanup:
    return retval;
 }
 
-int db_inventory_update_file(
+int db_sqlite_inventory_update_file(
    sqlite3* db, bstring file_path, enum hash_algo hash_type
 ) {
    struct stat file_stat;
@@ -174,7 +174,7 @@ int db_inventory_update_file(
    
          case SQLITE_ROW:
             existing_found++;
-            object_retval = db_sql_storage_file( query, &file_object );
+            object_retval = db_sqlite_sql_storage_file( query, &file_object );
             CATCH_NONZERO(
                object_retval, retval, 1,
                "Skipping. Error converting: %s\n", bdata( file_path )
@@ -334,7 +334,7 @@ cleanup:
    return retval;
 }
 
-int db_print_dupe( void* arg, int cols, char** strs, char** col_names ) {
+int db_sqlite_print_dupe( void* arg, int cols, char** strs, char** col_names ) {
    struct db_hash_list* hash_list = (struct db_hash_list*)arg;
    int new_sz = 0;
    int retval = 0;
@@ -368,7 +368,7 @@ cleanup:
    return retval;
 }
 
-int db_list_dupes( sqlite3* db, struct db_hash_list* hash_list ) {
+int db_sqlite_list_dupes( sqlite3* db, struct db_hash_list* hash_list ) {
    char* err_msg = NULL;
    int count = 0;
 
@@ -376,7 +376,7 @@ int db_list_dupes( sqlite3* db, struct db_hash_list* hash_list ) {
       db,  
       "select hash_contents from files group by hash_contents "
          "having count(*) > 1;",
-      db_print_dupe,
+      db_sqlite_print_dupe,
       hash_list,
       &err_msg
    );

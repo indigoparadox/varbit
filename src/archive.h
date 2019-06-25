@@ -21,7 +21,7 @@ typedef struct {
 } storage_file;
 
 int archive_inventory_update_walk(
-   DB_TYPE db, bstring archive_path, enum hash_algo hash_type );
+   void* db, enum db, bstring archive_path, enum hash_algo hash_type );
 int archive_hash_file(
    bstring file_path, enum hash_algo hash_type, uint8_t hash[HASH_MAX_LEN] );
 void archive_free_storage_file( storage_file* );
