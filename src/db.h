@@ -6,9 +6,6 @@
 #include "hash.h"
 
 enum db {
-#ifdef USE_MONGO
-   VBDB_MONGO = 1,
-#endif /* USE_MONGO */
 #ifdef USE_SQLITE
    VBDB_SQLITE = 2
 #endif /* USE_MONGO */

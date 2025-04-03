@@ -28,7 +28,6 @@
 #include "util.h"
 #include "hash.h"
 #include "dbsqlite.h"
-#include "dbmongo.h"
 
 #ifdef USE_THREADPOOL
 #include "thpool.h"
@@ -45,18 +44,10 @@ struct archive_path_db {
 
 void db_inventory_update_file_thd( struct archive_path_db* thargs ) {
    switch( thargs->db_type ) {
-#ifdef USE_SQLITE
    case VBDB_SQLITE:
       db_sqlite_inventory_update_file(
          thargs->db, thargs->subdir_path, thargs->hash_type );
       break;
-#endif /* USE_SQLITE */
-#ifdef USE_SQLITE
-   case VBDB_MONGO:
-      db_mongo_inventory_update_file(
-         thargs->db, thargs->subdir_path, thargs->hash_type );
-      break;
-#endif /* USE_MONGO */
    }
    bdestroy( thargs->subdir_path );
    free( thargs );
@@ -109,16 +100,9 @@ int archive_inventory_update_walk(
             g_thpool, (void*)db_inventory_update_file_thd, (void*)thargs );
 #else
          switch( db_type ) {
-#ifdef USE_SQLITE
          case VBDB_SQLITE:
             db_sqlite_inventory_update_file( db, subdir_path, hash_type );
             break;
-#endif /* USE_SQLITE */
-#ifdef USE_MONGO
-         case VBDB_MONGO:
-            db_mongo_inventory_update_file( db, subdir_path, hash_type );
-            break;
-#endif /* USE_MONGO */
          }
 #endif /* USE_THREADPOOL */
       } else if( DT_LNK == entry->d_type ) {

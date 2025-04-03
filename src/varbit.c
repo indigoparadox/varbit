@@ -20,7 +20,6 @@
 #include "bstrlib.h"
 #include "util.h"
 #include "archive.h"
-#include "dbmongo.h"
 #include "dbsqlite.h"
 #include "hash.h"
 
@@ -48,11 +47,6 @@ static void db_list_dupes(
       db_sqlite_list_dupes( db, dupes );
       break;
 #endif /* USE_SQLITE */
-#ifdef USE_MONGO
-   case VBDB_MONGO:
-      db_mongo_list_dupes( db, dupes );
-      break;
-#endif /* USE_MONGO */
    }
 }
 
